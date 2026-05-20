@@ -1,0 +1,36 @@
+# CalCOFI Schema — Jekyll site at https://calcofi.io/schema/
+#
+# Browses the per-release metadata.json sidecar uploaded by
+# CalCOFI/workflows/release_database.qmd. All content is rendered
+# client-side from GCS JSON — there is no DuckDB-WASM here.
+
+title:       "CalCOFI Schema"
+description: "Tables, columns, ER diagram and dataset citations for every CalCOFI release."
+url:         "https://calcofi.io"
+baseurl:     "/schema"
+markdown:    kramdown
+
+# Base URL for release artefacts on the public GCS bucket. Every per-version
+# fetch (metadata.json, erd.mmd, relationships.json, catalog.json,
+# RELEASE_NOTES.md) is built off this prefix. The versions.json + latest.txt
+# pair lives one folder up.
+gcs_releases_base: https://storage.googleapis.com/calcofi-db/ducklake/releases
+
+# Pinned external lib versions used at runtime. Update by editing this file;
+# index.html and app.js read them via Liquid.
+mermaid_version:      "11.4.1"
+svg_pan_zoom_version: "3.6.2"
+marked_version:       "12.0.2"
+
+plugins:
+  - jekyll-relative-links
+
+exclude:
+  - README.md
+  - LICENSE
+  - Gemfile
+  - Gemfile.lock
+  - vendor
+  - node_modules
+  - .bundle
+  - .jekyll-cache

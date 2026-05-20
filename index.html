@@ -1,0 +1,74 @@
+---
+layout: default
+---
+
+{%- comment -%}
+  Each tab panel is rendered into one of these <section>s by app.js. The
+  shell is intentionally empty — the real content (ERD diagram, sortable
+  tables, dataset cards, etc.) is built client-side from the metadata.json
+  / erd.mmd / relationships.json / catalog.json sidecars on GCS.
+{%- endcomment -%}
+
+<div id="release-meta-panel" hidden>
+  <div class="release-meta-row">
+    <span class="rm-key">version</span> <span id="rm-version"></span>
+    <span class="rm-sep">·</span>
+    <span class="rm-key">released</span> <span id="rm-date"></span>
+    <span class="rm-sep">·</span>
+    <span class="rm-key">tables</span> <span id="rm-tables"></span>
+    <span class="rm-sep">·</span>
+    <span class="rm-key">rows</span> <span id="rm-rows"></span>
+    <span class="rm-sep">·</span>
+    <span class="rm-key">size</span> <span id="rm-size"></span>
+    <button id="rm-notes-toggle" class="rm-notes-toggle" type="button">release notes</button>
+  </div>
+</div>
+
+<dialog id="notes-modal" class="notes-modal" aria-labelledby="notes-modal-title">
+  <div class="notes-modal-header">
+    <h2 id="notes-modal-title">Release notes · <span id="notes-modal-version"></span></h2>
+    <button id="notes-modal-close" class="notes-modal-close" type="button" aria-label="Close">×</button>
+  </div>
+  <div id="notes-modal-body" class="notes-modal-body"></div>
+</dialog>
+
+<section id="tab-erd" class="tab-panel" data-tab="erd">
+  <div class="erd-toolbar">
+    <button id="erd-fit" type="button" class="erd-btn" title="Fit to viewport">⤢ fit</button>
+    <span class="erd-hint muted">drag to pan · scroll to zoom</span>
+  </div>
+  <div id="erd-container" class="erd-container">
+    <div id="erd-svg-wrap" class="erd-svg-wrap"></div>
+  </div>
+</section>
+
+<section id="tab-tables" class="tab-panel" data-tab="tables" hidden>
+  <div class="filter-row">
+    <input id="tables-filter" type="search" placeholder="filter tables…" autocomplete="off">
+    <span id="tables-count" class="muted"></span>
+  </div>
+  <div id="tables-list" class="cards-grid"></div>
+</section>
+
+<section id="tab-columns" class="tab-panel" data-tab="columns" hidden>
+  <div class="filter-row">
+    <input id="columns-filter" type="search" placeholder="filter columns (table, name, units, description)…" autocomplete="off">
+    <span id="columns-count" class="muted"></span>
+  </div>
+  <div id="columns-tablewrap" class="tablewrap"></div>
+</section>
+
+<section id="tab-datasets" class="tab-panel" data-tab="datasets" hidden>
+  <div id="datasets-list" class="cards-grid"></div>
+</section>
+
+<section id="tab-measurements" class="tab-panel" data-tab="measurements" hidden>
+  <div class="filter-row">
+    <input id="meas-filter" type="search" placeholder="filter measurement types…" autocomplete="off">
+    <label class="cb-inline">
+      <input id="meas-canonical-only" type="checkbox"> canonical only
+    </label>
+    <span id="meas-count" class="muted"></span>
+  </div>
+  <div id="meas-tablewrap" class="tablewrap"></div>
+</section>

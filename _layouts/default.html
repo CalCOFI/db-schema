@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ page.title | default: site.title }}</title>
+  <meta name="description" content="{{ page.description | default: site.description }}">
+
+  <!-- apply saved theme before stylesheet load to avoid a flash -->
+  <script>
+    document.documentElement.dataset.theme =
+      localStorage.getItem("theme") || "dark";
+  </script>
+
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ '/assets/favicon-32x32.png' | relative_url }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ '/assets/favicon-16x16.png' | relative_url }}">
+  <link rel="stylesheet" href="{{ '/style.css' | relative_url }}">
+</head>
+<body>
+
+<div id="layout">
+
+  <header class="app-header">
+    <a class="app-logo" href="{{ '/' | relative_url }}" aria-label="CalCOFI Schema — home">
+      <img class="logo-dark"  src="{{ '/assets/logo_calcofi.svg'       | relative_url }}" alt="CalCOFI" width="32" height="32">
+      <img class="logo-light" src="{{ '/assets/logo_calcofi_light.svg' | relative_url }}" alt="CalCOFI" width="32" height="32">
+    </a>
+    <h1>{{ site.title }}</h1>
+
+    <label class="version-picker">
+      <span class="vp-label">release</span>
+      <select id="version-select" aria-label="Release version"></select>
+    </label>
+
+    <span class="spacer"></span>
+
+    <nav class="tab-nav" role="tablist">
+      <button role="tab" data-tab="erd"          class="tab active">Diagram</button>
+      <button role="tab" data-tab="tables"       class="tab">Tables</button>
+      <button role="tab" data-tab="columns"      class="tab">Columns</button>
+      <button role="tab" data-tab="datasets"     class="tab">Datasets</button>
+      <button role="tab" data-tab="measurements" class="tab">Measurements</button>
+    </nav>
+
+    <button id="theme-toggle" type="button" aria-label="Toggle dark / light theme">🌓</button>
+  </header>
+
+  <main id="panel">
+    <div id="status" class="status muted">Loading…</div>
+    {{ content }}
+    <footer class="app-footer">
+      <p>
+        Source · <a href="https://github.com/CalCOFI/schema">CalCOFI/schema</a>
+        · Data · <a href="https://storage.googleapis.com/calcofi-db/ducklake/releases/">release sidecars on GCS</a>
+        · See also · <a href="https://calcofi.io/query/">query</a>
+        · <a href="https://calcofi.io/docs/">docs</a>
+        · <a href="https://calcofi.io/calcofi4r/">calcofi4r</a>
+      </p>
+    </footer>
+  </main>
+
+</div>
+
+<!-- GCS base for per-release sidecars (set in _config.yml) -->
+<script>
+  window.SCHEMA_GCS_BASE = "{{ site.gcs_releases_base }}";
+</script>
+
+<!-- third-party libs, pinned in _config.yml -->
+<script src="https://cdn.jsdelivr.net/npm/mermaid@{{ site.mermaid_version }}/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@{{ site.svg_pan_zoom_version }}/dist/svg-pan-zoom.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@{{ site.marked_version }}/marked.min.js"></script>
+
+<script type="module" src="{{ '/app.js' | relative_url }}"></script>
+</body>
+</html>
