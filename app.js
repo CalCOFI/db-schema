@@ -35,13 +35,16 @@ function setStatus(msg, cls = "muted") {
   el.className = `status ${cls}`;
 }
 
+// revalidate sidecars (conditional GET → 304 when unchanged) so a re-uploaded
+// release (same URL, new content) is picked up without waiting out the GCS
+// max-age=3600 cache. "no-cache" still lets the browser reuse a validated copy.
 async function fetchText(url) {
-  const r = await fetch(url);
+  const r = await fetch(url, { cache: "no-cache" });
   if (!r.ok) throw new Error(`${r.status} ${url}`);
   return r.text();
 }
 async function fetchJson(url) {
-  const r = await fetch(url);
+  const r = await fetch(url, { cache: "no-cache" });
   if (!r.ok) throw new Error(`${r.status} ${url}`);
   return r.json();
 }
