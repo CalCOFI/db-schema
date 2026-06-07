@@ -18,7 +18,7 @@ gcs_releases_base: https://storage.googleapis.com/calcofi-db/ducklake/releases
 
 # Pinned external lib versions used at runtime. Update by editing this file;
 # index.html and app.js read them via Liquid.
-mermaid_version:      "11.4.1"
+mermaid_version:      "11.12.0"   # >= 11.5 needed for erDiagram classDef/stroke styling
 svg_pan_zoom_version: "3.6.2"
 marked_version:       "12.0.2"
 
