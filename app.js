@@ -671,6 +671,7 @@ function renderDatasets(blobs) {
     const links = [];
     if (d.link_calcofi_org) links.push(`<a href="${escHtml(d.link_calcofi_org)}" target="_blank">calcofi.org</a>`);
     if (d.link_data_source) links.push(`<a href="${escHtml(d.link_data_source)}" target="_blank">data source</a>`);
+    if (d.workflow_url)     links.push(`<a href="${escHtml(d.workflow_url)}" target="_blank">workflow ↗</a>`);
     const col = State.datasetColor[key];
     const sw  = col ? `<span class="ds-swatch" style="background:${escHtml(col)}"></span>` : "";
     return `
