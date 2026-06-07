@@ -24,6 +24,12 @@ layout: default
   </div>
 </div>
 
+<div id="global-filter-bar" class="filter-bar" hidden>
+  <span class="filter-bar-label muted">filter by dataset:</span>
+  <span id="filter-chips" class="filter-chips"></span>
+  <button id="filter-clear" class="filter-clear" type="button" hidden>clear ✕</button>
+</div>
+
 <dialog id="notes-modal" class="notes-modal" aria-labelledby="notes-modal-title">
   <div class="notes-modal-header">
     <h2 id="notes-modal-title">Release notes · <span id="notes-modal-version"></span></h2>
@@ -36,6 +42,7 @@ layout: default
   <div class="erd-toolbar">
     <button id="erd-fit" type="button" class="erd-btn" title="Fit to viewport">⤢ fit</button>
     <span class="erd-hint muted">drag to pan · scroll to zoom</span>
+    <span id="erd-legend" class="erd-legend"></span>
   </div>
   <div id="erd-container" class="erd-container">
     <div id="erd-svg-wrap" class="erd-svg-wrap"></div>

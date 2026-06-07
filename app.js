@@ -22,6 +22,9 @@ const State = window.SchemaApp = {
   activeVersion:   null,
   activeTab:       "erd",
   byVersion:       new Map(), // version → {metadata, erd, relationships, catalog, notes}
+  filters:         new Set(), // active "provider_dataset" tag filters (OR across)
+  datasetColor:    {},        // provider_dataset → hex (from metadata.erd_legend)
+  _apply:          {},        // tab → fn re-applying text+tag filters for that tab
 };
 
 // ─── utility ────────────────────────────────────────────────────────────
@@ -64,6 +67,72 @@ function mdToHtml(s) {
   if (!s) return "";
   try   { return marked.parse(s, { breaks: false }); }
   catch { return escHtml(s); }
+}
+
+// ─── tag filtering (shared across tabs) ───────────────────────────────────
+
+// the provider_dataset tags a table belongs to. Prefers the authoritative
+// contributions block (multi-dataset for shared tables); falls back to the
+// table's own provider/dataset. Returns a (possibly empty) array.
+function tableDatasets(name, blobs) {
+  const meta = blobs.metadata || {};
+  const contrib = (meta.contributions || {})[name];
+  if (contrib && Array.isArray(contrib.by_dataset) && contrib.by_dataset.length) {
+    return contrib.by_dataset.map(c => c.provider_dataset).filter(Boolean);
+  }
+  const t = (meta.tables || {})[name];
+  if (t && t.provider && t.dataset) return [`${t.provider}_${t.dataset}`];
+  return [];
+}
+
+// does a node (tagged with data-datasets="a b c") pass the active tag filter?
+function passesTags(datasets) {
+  if (State.filters.size === 0) return true;
+  return (datasets || []).some(d => State.filters.has(d));
+}
+
+function tagAttr(datasets) {
+  return `data-datasets="${escHtml((datasets || []).join(" "))}"`;
+}
+
+// toggle a dataset tag and re-apply the current tab's filter
+function toggleFilter(ds) {
+  if (State.filters.has(ds)) State.filters.delete(ds);
+  else                       State.filters.add(ds);
+  applyForCurrentTab();
+}
+
+function applyForCurrentTab() {
+  updateFilterBarUI();
+  const fn = State._apply[State.activeTab];
+  if (typeof fn === "function") fn();
+}
+
+// ─── global filter bar ────────────────────────────────────────────────────
+
+function renderFilterBar(blobs) {
+  const bar  = $("#global-filter-bar");
+  const wrap = $("#filter-chips");
+  if (!bar || !wrap) return;
+  const datasets = Object.keys((blobs.metadata || {}).datasets || {}).sort();
+  if (!datasets.length) { bar.hidden = true; return; }
+  // drop any active filters not present in this version
+  for (const f of [...State.filters]) if (!datasets.includes(f)) State.filters.delete(f);
+  wrap.innerHTML = datasets.map(d => {
+    const col = State.datasetColor[d];
+    const sw  = col ? `<span class="ds-swatch" style="background:${escHtml(col)}"></span>` : "";
+    return `<button type="button" class="filter-chip" data-dataset="${escHtml(d)}">${sw}${escHtml(d)}</button>`;
+  }).join("");
+  bar.hidden = false;
+  updateFilterBarUI();
+}
+
+function updateFilterBarUI() {
+  $$("#filter-chips .filter-chip").forEach(b => {
+    b.classList.toggle("active", State.filters.has(b.dataset.dataset));
+  });
+  const clear = $("#filter-clear");
+  if (clear) clear.hidden = State.filters.size === 0;
 }
 
 // ─── initial load ───────────────────────────────────────────────────────
@@ -175,6 +244,13 @@ function renderReleaseMeta(version, blobs) {
   } else {
     body.innerHTML = `<em class="muted">No RELEASE_NOTES.md found for ${escHtml(version)}.</em>`;
   }
+
+  // dataset → color map (defensive: erd_legend is new; old releases lack it)
+  State.datasetColor = {};
+  for (const e of (meta && meta.erd_legend) || []) {
+    if (e && e.provider_dataset) State.datasetColor[e.provider_dataset] = e.color;
+  }
+  renderFilterBar(blobs);
 }
 
 // ─── header / tab wiring ────────────────────────────────────────────────
@@ -216,6 +292,16 @@ function bindHeader() {
     State._erdPanZoom.fit();
     State._erdPanZoom.center();
   });
+  // delegated: any clickable dataset tag (filter bar or in-card chip) toggles
+  // the corresponding cross-tab filter
+  document.addEventListener("click", (e) => {
+    const chip = e.target.closest(".filter-chip[data-dataset]");
+    if (chip) { toggleFilter(chip.dataset.dataset); }
+  });
+  $("#filter-clear").addEventListener("click", () => {
+    State.filters.clear();
+    applyForCurrentTab();
+  });
 }
 
 function setActiveTabUI(tab) {
@@ -234,20 +320,37 @@ function renderActiveTab(forceRefresh = false) {
     delete State._rendered[t];
   }
   State._rendered = State._rendered || {};
-  if (State._rendered[t]) return;
-  State._rendered[t] = true;
-  switch (t) {
-    case "erd":          renderErd(blobs);          break;
-    case "tables":       renderTables(blobs);       break;
-    case "columns":      renderColumns(blobs);      break;
-    case "datasets":     renderDatasets(blobs);     break;
-    case "measurements": renderMeasurements(blobs); break;
+  if (!State._rendered[t]) {
+    State._rendered[t] = true;
+    switch (t) {
+      case "erd":          renderErd(blobs);          break;
+      case "tables":       renderTables(blobs);       break;
+      case "columns":      renderColumns(blobs);      break;
+      case "datasets":     renderDatasets(blobs);     break;
+      case "measurements": renderMeasurements(blobs); break;
+    }
   }
+  // re-apply active tag filters for the now-active tab (filters may have
+  // changed while a different tab was showing)
+  const apply = State._apply[t];
+  if (typeof apply === "function") apply();
 }
 
 // ─── ERD ────────────────────────────────────────────────────────────────
 
+function renderErdLegend(blobs) {
+  const el = $("#erd-legend");
+  if (!el) return;
+  const legend = (blobs.metadata || {}).erd_legend || [];
+  if (!legend.length) { el.innerHTML = ""; return; }
+  el.innerHTML = legend.map(e =>
+    `<span class="erd-legend-item">
+       <span class="ds-swatch" style="background:${escHtml(e.color)}"></span>${escHtml(e.provider_dataset)}
+     </span>`).join("");
+}
+
 async function renderErd(blobs) {
+  renderErdLegend(blobs);
   const wrap = $("#erd-svg-wrap");
   wrap.innerHTML = "";
   if (!blobs.erd) {
@@ -310,18 +413,26 @@ function renderTables(blobs) {
     colsByTable.get(tbl).push({ column: col, ...entry });
   }
 
+  const knownDatasets = new Set(Object.keys(meta.datasets || {}));
   list.innerHTML = tables.map(([name, t]) => {
     const cols = colsByTable.get(name) || [];
     const rows = rowsByTable.get(name);
+    const ds   = tableDatasets(name, blobs);
+    // one chip per dataset this table belongs to (shared tables get several);
+    // clickable only for registered datasets so it ties into the filter bar
+    const dsChips = ds.length
+      ? ds.map(d => knownDatasets.has(d)
+          ? `<button type="button" class="chip filter-chip" data-dataset="${escHtml(d)}">${escHtml(d)}</button>`
+          : `<span class="chip">${escHtml(d)}</span>`).join("")
+      : [t.provider, t.dataset].filter(Boolean).map(x => `<span class="chip">${escHtml(x)}</span>`).join("");
     return `
-      <article class="card" data-table-name="${escHtml(name)}">
+      <article class="card" data-table-name="${escHtml(name)}" ${tagAttr(ds)}>
         <h3>
           <span>${escHtml(name)}</span>
           ${t.name_long ? `<span class="name-long">${escHtml(t.name_long)}</span>` : ""}
         </h3>
         <div class="card-meta">
-          ${t.provider ? `<span class="chip">${escHtml(t.provider)}</span>` : ""}
-          ${t.dataset  ? `<span class="chip">${escHtml(t.dataset)}</span>`  : ""}
+          ${dsChips}
           ${rows != null ? `<span class="chip">${fmtInt(rows)} rows</span>` : ""}
           <span class="chip">${cols.length} cols</span>
         </div>
@@ -343,35 +454,43 @@ function renderTables(blobs) {
     `;
   }).join("");
 
-  $("#tables-count").textContent = `${tables.length} tables`;
-
-  // filter input
-  $("#tables-filter").oninput = (e) => {
-    const q = e.target.value.toLowerCase().trim();
+  // text + tag filter (registered so the filter bar + tab switches re-apply it)
+  const apply = () => {
+    const q = ($("#tables-filter").value || "").toLowerCase().trim();
     let visible = 0;
     $$("#tables-list .card").forEach(card => {
-      const text = card.textContent.toLowerCase();
-      const show = !q || text.includes(q);
+      const ds   = (card.dataset.datasets || "").split(" ").filter(Boolean);
+      const show = (!q || card.textContent.toLowerCase().includes(q)) && passesTags(ds);
       card.style.display = show ? "" : "none";
       if (show) visible++;
     });
     $("#tables-count").textContent = `${visible} / ${tables.length} tables`;
   };
+  State._apply.tables = apply;
+  $("#tables-filter").oninput = apply;
+  apply();
 }
 
 // ─── Columns (flat sortable table) ──────────────────────────────────────
 
 function renderColumns(blobs) {
   const meta = blobs.metadata;
+  const dsCache = new Map();
+  const dsFor = (tbl) => {
+    if (!dsCache.has(tbl)) dsCache.set(tbl, tableDatasets(tbl, blobs));
+    return dsCache.get(tbl);
+  };
   const all = Object.entries(meta.columns || {}).map(([key, c]) => {
     const dot = key.indexOf(".");
+    const table = key.slice(0, dot);
     return {
-      table:       key.slice(0, dot),
+      table,
       column:      key.slice(dot + 1),
       data_type:   c.data_type || "",
       units:       c.units || "",
       name_long:   c.name_long || "",
       description: c.description_md || "",
+      datasets:    dsFor(table),
     };
   });
   all.sort((a, b) => a.table.localeCompare(b.table) || a.column.localeCompare(b.column));
@@ -411,11 +530,10 @@ function renderColumns(blobs) {
   let sortKey = "table";
   let sortDir = 1;
   function apply() {
-    let rows = filterQ
-      ? all.filter(r =>
-          (r.table + " " + r.column + " " + r.units + " " + r.data_type +
-           " " + r.name_long + " " + r.description).toLowerCase().includes(filterQ))
-      : all.slice();
+    let rows = all.filter(r => passesTags(r.datasets) && (
+      !filterQ ||
+      (r.table + " " + r.column + " " + r.units + " " + r.data_type +
+       " " + r.name_long + " " + r.description).toLowerCase().includes(filterQ)));
     rows.sort((a, b) => {
       const av = (a[sortKey] || "").toString();
       const bv = (b[sortKey] || "").toString();
@@ -424,6 +542,7 @@ function renderColumns(blobs) {
     current = rows;
     paint(rows);
   }
+  State._apply.columns = apply;
 
   $("#columns-filter").oninput = (e) => { filterQ = e.target.value.toLowerCase().trim(); apply(); };
   wrap.querySelectorAll("thead th").forEach(th => {
@@ -446,28 +565,71 @@ function renderDatasets(blobs) {
   const list = $("#datasets-list");
   const datasets = Object.entries(meta.datasets || {});
   datasets.sort((a, b) => a[0].localeCompare(b[0]));
+
+  // invert contributions → dataset → [{table, rows, pct, workflow}] and note
+  // which tables are shared across >1 dataset (so we show % only when meaningful)
+  const contribByDs = {};
+  const tableShared = {};
+  for (const [tbl, c] of Object.entries(meta.contributions || {})) {
+    const by = c.by_dataset || [];
+    tableShared[tbl] = by.length > 1;
+    for (const bd of by) {
+      (contribByDs[bd.provider_dataset] ||= []).push(
+        { table: tbl, rows: bd.rows, pct: bd.pct, workflow: bd.workflow });
+    }
+  }
+
+  const datasetTablesHtml = (key, d) => {
+    const items  = contribByDs[key] || [];
+    const byName = new Map(items.map(it => [it.table, it]));
+    const names  = [...new Set([...byName.keys(), ...((d.tables) || [])])].sort();
+    if (!names.length) return "";
+    const li = names.map(tbl => {
+      const it   = byName.get(tbl);
+      const rows = it && it.rows != null ? ` — ${fmtInt(it.rows)} rows` : "";
+      const pct  = (it && tableShared[tbl]) ? ` <span class="muted">(${it.pct}%)</span>` : "";
+      const wf   = (it && it.workflow && it.workflow !== "NA")
+        ? ` <a class="ds-wf" href="${escHtml(it.workflow)}" target="_blank" title="ingest workflow">↗</a>` : "";
+      return `<li><span class="mono">${escHtml(tbl)}</span>${rows}${pct}${wf}</li>`;
+    }).join("");
+    return `<details class="ds-tables"><summary>${names.length} tables ▾</summary><ul>${li}</ul></details>`;
+  };
+
   list.innerHTML = datasets.map(([key, d]) => {
     const links = [];
     if (d.link_calcofi_org) links.push(`<a href="${escHtml(d.link_calcofi_org)}" target="_blank">calcofi.org</a>`);
     if (d.link_data_source) links.push(`<a href="${escHtml(d.link_data_source)}" target="_blank">data source</a>`);
+    const col = State.datasetColor[key];
+    const sw  = col ? `<span class="ds-swatch" style="background:${escHtml(col)}"></span>` : "";
     return `
-      <article class="card">
+      <article class="card" data-dskey="${escHtml(key)}" ${tagAttr([key])}>
         <h3>
-          <span>${escHtml(d.provider || "")} / ${escHtml(d.dataset || "")}</span>
+          <span>${sw}${escHtml(d.provider || "")} / ${escHtml(d.dataset || "")}</span>
           ${d.dataset_name ? `<span class="name-long">${escHtml(d.dataset_name)}</span>` : ""}
         </h3>
         <div class="card-meta">
+          <button type="button" class="chip filter-chip" data-dataset="${escHtml(key)}">filter ▸ ${escHtml(key)}</button>
           ${d.coverage_temporal ? `<span class="chip">${escHtml(d.coverage_temporal)}</span>` : ""}
           ${d.coverage_spatial  ? `<span class="chip">${escHtml(d.coverage_spatial)}</span>`  : ""}
           ${d.license           ? `<span class="chip">${escHtml(d.license)}</span>`           : ""}
         </div>
         <div class="desc">${mdToHtml(d.description || "")}</div>
+        ${datasetTablesHtml(key, d)}
         ${d.citation_main ? `<div class="desc"><strong>Cite:</strong> ${mdToHtml(d.citation_main)}</div>` : ""}
         ${d.pi_names ? `<div class="desc muted"><strong>PI:</strong> ${escHtml(d.pi_names)}</div>` : ""}
         ${links.length ? `<div class="links">${links.join("")}</div>` : ""}
       </article>
     `;
   }).join("");
+
+  // tag filter for dataset cards (a card shows if its own key is selected)
+  State._apply.datasets = () => {
+    $$("#datasets-list .card").forEach(card => {
+      const ds = (card.dataset.datasets || "").split(" ").filter(Boolean);
+      card.style.display = passesTags(ds) ? "" : "none";
+    });
+  };
+  State._apply.datasets();
 }
 
 // ─── Measurement types ──────────────────────────────────────────────────
@@ -479,6 +641,7 @@ function renderMeasurements(blobs) {
     description:      v.description || "",
     units:            v.units || "",
     is_canonical:     !!v.is_canonical,
+    datasets:         Array.isArray(v.datasets) ? v.datasets : [],
   }));
   all.sort((a, b) => a.measurement_type.localeCompare(b.measurement_type));
 
@@ -503,7 +666,7 @@ function renderMeasurements(blobs) {
   let sortDir = 1;
 
   function apply() {
-    let rows = all.slice();
+    let rows = all.filter(r => passesTags(r.datasets));
     if (canonicalOnly) rows = rows.filter(r => r.is_canonical);
     if (filterQ) rows = rows.filter(r =>
       (r.measurement_type + " " + r.units + " " + r.description).toLowerCase().includes(filterQ));
@@ -522,6 +685,7 @@ function renderMeasurements(blobs) {
     `).join("");
     $("#meas-count").textContent = `${rows.length} / ${all.length} types`;
   }
+  State._apply.measurements = apply;
 
   $("#meas-filter").oninput = (e)         => { filterQ = e.target.value.toLowerCase().trim(); apply(); };
   $("#meas-canonical-only").onchange = (e) => { canonicalOnly = e.target.checked; apply(); };
