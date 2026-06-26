@@ -163,7 +163,11 @@ async function init() {
   sel.innerHTML = State.versions
     .map(v => {
       const isLatest = v.version === State.latestVersion;
-      const dateBit  = v.release_date ? ` · ${v.release_date}` : "";
+      // version is CalVer (vYYYY.MM.DD) so it already encodes the release date;
+      // only append the date when it genuinely differs (e.g. a same-version
+      // re-release on a later day) — otherwise it's redundant noise
+      const verDate  = v.version.replace(/^v/, "").replace(/\./g, "-");
+      const dateBit  = (v.release_date && v.release_date !== verDate) ? ` · ${v.release_date}` : "";
       const star     = isLatest ? "★ " : "";
       return `<option value="${escHtml(v.version)}">${star}${escHtml(v.version)}${escHtml(dateBit)}</option>`;
     })
@@ -262,6 +266,12 @@ function bindHeader() {
   $("#version-select").addEventListener("change", async (e) => {
     State.activeVersion = e.target.value;
     await loadVersion(State.activeVersion);
+    // a version switch changes every tab's data; drop ALL per-tab render caches
+    // so each tab rebuilds fresh on next view (not just the active one). Without
+    // this, a previously-viewed tab keeps the prior version's DOM while the
+    // rebuilt filter bar advertises the new version's datasets → filtering by a
+    // dataset absent from the stale DOM silently matches nothing.
+    State._rendered = {};
     renderActiveTab(true);
     syncHash();
   });
@@ -716,12 +726,17 @@ function renderDatasets(blobs) {
 
 function renderMeasurements(blobs) {
   const meta = blobs.metadata;
+  const knownDatasets = new Set(Object.keys(meta.datasets || {}));
   const all = Object.entries(meta.measurement_types || {}).map(([k, v]) => ({
     measurement_type: k,
     description:      v.description || "",
     units:            v.units || "",
     is_canonical:     !!v.is_canonical,
-    datasets:         Array.isArray(v.datasets) ? v.datasets : [],
+    // datasets may arrive as a JSON array or — when jsonlite auto_unbox collapses
+    // a length-1 vector — a bare string; normalize both to an array so the
+    // dataset filter (and the datasets column) work
+    datasets:         Array.isArray(v.datasets) ? v.datasets
+                       : (v.datasets ? [v.datasets] : []),
   }));
   all.sort((a, b) => a.measurement_type.localeCompare(b.measurement_type));
 
@@ -733,6 +748,7 @@ function renderMeasurements(blobs) {
           <th data-key="measurement_type" aria-sort="ascending">measurement_type</th>
           <th data-key="units">units</th>
           <th data-key="is_canonical">canonical</th>
+          <th data-key="datasets">datasets</th>
           <th data-key="description">description</th>
         </tr>
       </thead>
@@ -760,6 +776,15 @@ function renderMeasurements(blobs) {
         <td class="mono">${escHtml(r.measurement_type)}</td>
         <td class="units">${escHtml(r.units)}</td>
         <td>${r.is_canonical ? `<span class="badge canonical">canonical</span>` : `<span class="badge">variant</span>`}</td>
+        <td class="meas-datasets">${r.datasets.length
+          ? r.datasets.map(d => {
+              const col = State.datasetColor[d];
+              const sw  = col ? `<span class="ds-swatch" style="background:${escHtml(col)}"></span>` : "";
+              return knownDatasets.has(d)
+                ? `<button type="button" class="chip filter-chip" data-dataset="${escHtml(d)}">${sw}${escHtml(d)}</button>`
+                : `<span class="chip">${sw}${escHtml(d)}</span>`;
+            }).join(" ")
+          : `<span class="muted">—</span>`}</td>
         <td>${escHtml(r.description)}</td>
       </tr>
     `).join("");

@@ -347,6 +347,17 @@ main#panel { padding: 1.0rem 1.5rem 4rem; }
   background: var(--accent); border-color: var(--accent); color: #fff;
 }
 
+/* dataset chips inside the Measurements table cell — wrap, don't overflow */
+td.meas-datasets { white-space: normal; }
+td.meas-datasets .chip,
+td.meas-datasets .filter-chip {
+  display: inline-flex; align-items: center; gap: 0.3rem; margin: 0.1rem 0.15rem 0.1rem 0;
+}
+td.meas-datasets .filter-chip { cursor: pointer; }
+td.meas-datasets .filter-chip.active {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+
 /* ── Datasets tab: contributed-tables list ───────────────────────────────── */
 .ds-tables { margin: 0.35rem 0; font-size: 0.82rem; }
 .ds-tables > summary { cursor: pointer; color: var(--muted); font-family: var(--mono); font-size: 0.78rem; }
