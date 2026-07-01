@@ -2,7 +2,7 @@
 
 Browse the schema of every CalCOFI database release — tables, columns,
 ER diagram, datasets and measurement types — at
-[**calcofi.io/schema**](https://calcofi.io/schema/).
+[**calcofi.io/db-schema**](https://calcofi.io/db-schema/).
 
 The site is a static Jekyll page that consumes the per-release sidecars
 uploaded to `gs://calcofi-db/ducklake/releases/{version}/` by
@@ -34,7 +34,7 @@ UI against live release data with no auth.
 
 ## Sibling sites
 
-- [`calcofi.io/query`](https://github.com/CalCOFI/query) — DuckDB-WASM
+- [`calcofi.io/db-query`](https://github.com/CalCOFI/db-query) — DuckDB-WASM
   query playground (pre-baked + free-form SQL)
 - [`calcofi.io/docs`](https://github.com/CalCOFI/docs) — long-form
   documentation

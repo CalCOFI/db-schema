@@ -1,4 +1,4 @@
-# CalCOFI Schema — Jekyll site at https://calcofi.io/schema/
+# CalCOFI Schema — Jekyll site at https://calcofi.io/db-schema/
 #
 # Browses the per-release metadata.json sidecar uploaded by
 # CalCOFI/workflows/release_database.qmd. All content is rendered
@@ -7,7 +7,7 @@
 title:       "CalCOFI Schema"
 description: "Tables, columns, ER diagram and dataset citations for every CalCOFI release."
 url:         "https://calcofi.io"
-baseurl:     "/schema"
+baseurl:     "/db-schema"
 markdown:    kramdown
 
 # Base URL for release artefacts on the public GCS bucket. Every per-version
