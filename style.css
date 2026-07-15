@@ -306,6 +306,24 @@ main#panel { padding: 1.0rem 1.5rem 4rem; }
   border: 1px solid var(--border); vertical-align: middle;
 }
 
+/* ── per-table dataset contribution bar ──────────────────────────────────── */
+.contrib { margin: 0.15rem 0 0.55rem 0; }
+.contrib-bar {
+  display: flex; width: 100%; height: 0.7rem; border-radius: 3px;
+  overflow: hidden; border: 1px solid var(--border); background: var(--panel);
+}
+.contrib-seg {
+  height: 100%; min-width: 2px; transition: filter 0.1s ease;
+  border-right: 1px solid var(--panel); box-sizing: border-box;
+}
+.contrib-seg:last-child { border-right: 0; }
+.contrib-seg:hover { filter: brightness(1.15); cursor: help; }
+/* dim non-matching segments when a dataset filter is active */
+.contrib-bar.dim-others .contrib-seg:not(.on) { opacity: 0.25; }
+.contrib-cap { font-size: 0.68rem; margin-top: 0.15rem; }
+.contrib-warn { color: var(--warn); margin-left: 0.3rem; cursor: help; }
+.ds-tables .contrib { margin: 0.2rem 0 0.35rem 0; max-width: 22rem; }
+
 /* ── global dataset filter bar ───────────────────────────────────────────── */
 .filter-bar {
   display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem;

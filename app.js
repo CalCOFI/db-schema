@@ -98,6 +98,54 @@ function tagAttr(datasets) {
   return `data-datasets="${escHtml((datasets || []).join(" "))}"`;
 }
 
+// ─── per-table dataset contribution bar ───────────────────────────────────
+
+// a horizontal stacked bar of a table's row-count contributions by dataset,
+// colored via the erd_legend (State.datasetColor). Segment WIDTH is the
+// normalized row share (always sums to 100%, even when a shared vocabulary is
+// over-attributed) while the hover tooltip reports the attributed rows + pct.
+// Most impactful on the consolidated obs / sample / obs_freq / sample_measurement
+// tables where several datasets genuinely stack.
+function contribBar(name, blobs) {
+  const c = ((blobs.metadata || {}).contributions || {})[name];
+  if (!c || !Array.isArray(c.by_dataset)) return "";
+  const by = c.by_dataset.filter(b => (b.rows || 0) > 0);
+  if (!by.length) return "";
+  const total = by.reduce((s, b) => s + (b.rows || 0), 0) || 1;
+  const segs = by.slice().sort((a, b) => b.rows - a.rows).map(b => {
+    const w   = Math.max(0.6, (b.rows / total) * 100);   // keep tiny slices visible
+    const col = State.datasetColor[b.provider_dataset] || "var(--muted)";
+    const pct = (b.pct != null) ? b.pct : Math.round((b.rows / total) * 1000) / 10;
+    const tip = `${b.provider_dataset}: ${fmtInt(b.rows)} rows (${pct}%)`;
+    return `<span class="contrib-seg" style="width:${w}%;background:${escHtml(col)}"`
+         + ` data-dataset="${escHtml(b.provider_dataset)}" title="${escHtml(tip)}"></span>`;
+  }).join("");
+  const warn = c.over_attributed
+    ? `<span class="contrib-warn" title="datasets share this vocabulary; attributed rows exceed the table total">⚠</span>`
+    : "";
+  const n = by.length;
+  const lbl = `${n} dataset${n === 1 ? "" : "s"} · ${fmtInt(c.total_rows != null ? c.total_rows : total)} rows`;
+  return `<div class="contrib" data-table="${escHtml(name)}">`
+       + `<div class="contrib-bar" role="img" aria-label="dataset row contributions for ${escHtml(name)}">${segs}</div>`
+       + `<div class="contrib-cap muted">${lbl}${warn}</div></div>`;
+}
+
+// tie the contribution bars into the shared dataset filter: dim the segments
+// that don't belong to any active filter (call after each tab's filter apply).
+function highlightContrib() {
+  const active = State.filters;
+  $$(".contrib-bar").forEach(bar => {
+    const segs = $$(".contrib-seg", bar);
+    if (!active.size) {
+      bar.classList.remove("dim-others");
+      segs.forEach(s => s.classList.remove("on"));
+      return;
+    }
+    bar.classList.add("dim-others");
+    segs.forEach(s => s.classList.toggle("on", active.has(s.dataset.dataset)));
+  });
+}
+
 // toggle a dataset tag and re-apply the current tab's filter
 function toggleFilter(ds) {
   if (State.filters.has(ds)) State.filters.delete(ds);
@@ -525,6 +573,7 @@ function renderTables(blobs) {
           ${rows != null ? `<span class="chip">${fmtInt(rows)} rows</span>` : ""}
           <span class="chip">${cols.length} cols</span>
         </div>
+        ${contribBar(name, blobs)}
         <div class="desc">${mdToHtml(t.description_md)}</div>
         <details>
           <summary class="col-toggle">columns ▾</summary>
@@ -554,6 +603,7 @@ function renderTables(blobs) {
       if (show) visible++;
     });
     $("#tables-count").textContent = `${visible} / ${tables.length} tables`;
+    highlightContrib();
   };
   State._apply.tables = apply;
   $("#tables-filter").oninput = apply;
@@ -679,7 +729,9 @@ function renderDatasets(blobs) {
       const pct  = (it && tableShared[tbl]) ? ` <span class="muted">(${it.pct}%)</span>` : "";
       const wf   = (it && it.workflow && it.workflow !== "NA")
         ? ` <a class="ds-wf" href="${escHtml(it.workflow)}" target="_blank" title="ingest workflow">↗</a>` : "";
-      return `<li><span class="mono">${escHtml(tbl)}</span>${rows}${pct}${wf}</li>`;
+      // for tables this dataset shares with others, show the full composition bar
+      const bar  = tableShared[tbl] ? contribBar(tbl, blobs) : "";
+      return `<li><span class="mono">${escHtml(tbl)}</span>${rows}${pct}${wf}${bar}</li>`;
     }).join("");
     return `<details class="ds-tables"><summary>${names.length} tables ▾</summary><ul>${li}</ul></details>`;
   };
@@ -718,6 +770,7 @@ function renderDatasets(blobs) {
       const ds = (card.dataset.datasets || "").split(" ").filter(Boolean);
       card.style.display = passesTags(ds) ? "" : "none";
     });
+    highlightContrib();
   };
   State._apply.datasets();
 }
