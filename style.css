@@ -442,6 +442,12 @@ td.meas-datasets .filter-chip.active {
   font-family: var(--mono);
   font-size: 0.74rem;
 }
+.card .card-meta .chip.chip-supp {
+  background: color-mix(in srgb, #d9822b 22%, var(--panel-2));
+  border-color: color-mix(in srgb, #d9822b 55%, var(--border));
+  color: var(--fg);
+  cursor: help;
+}
 .card .desc { color: var(--fg); margin: 0.25rem 0; }
 .card .desc p:first-child { margin-top: 0; }
 .card .desc p:last-child  { margin-bottom: 0; }

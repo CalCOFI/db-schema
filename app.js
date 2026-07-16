@@ -535,8 +535,12 @@ function renderTables(blobs) {
   tables.sort((a, b) => a[0].localeCompare(b[0]));
 
   const rowsByTable = new Map();
+  const suppByTable = new Set();
   if (catalog && Array.isArray(catalog.tables)) {
-    for (const t of catalog.tables) rowsByTable.set(t.name, t.rows);
+    for (const t of catalog.tables) {
+      rowsByTable.set(t.name, t.rows);
+      if (t.supplemental) suppByTable.add(t.name);
+    }
   }
 
   // build a per-table column index from metadata.columns ("table.column" key)
@@ -572,6 +576,7 @@ function renderTables(blobs) {
           ${dsChips}
           ${rows != null ? `<span class="chip">${fmtInt(rows)} rows</span>` : ""}
           <span class="chip">${cols.length} cols</span>
+          ${suppByTable.has(name) ? `<span class="chip chip-supp" title="Supplemental table: hosted + downloadable and tagged to this release, but excluded from the ERD and hidden by cc_get_db() unless supplemental=TRUE.">supplemental</span>` : ""}
         </div>
         ${contribBar(name, blobs)}
         <div class="desc">${mdToHtml(t.description_md)}</div>
