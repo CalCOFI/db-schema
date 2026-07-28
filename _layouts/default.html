@@ -15,6 +15,27 @@
   <link rel="icon" type="image/png" sizes="32x32" href="{{ '/assets/favicon-32x32.png' | relative_url }}">
   <link rel="icon" type="image/png" sizes="16x16" href="{{ '/assets/favicon-16x16.png' | relative_url }}">
   <link rel="stylesheet" href="{{ '/style.css' | relative_url }}">
+
+  <!-- Google tag (gtag.js) — CalCOFI site property.
+       GENERATED/COPIED from CalCOFI/analytics → snippets/gtag-site.html.
+       Change only db-schema; keep the rest byte-identical across sites so
+       one snippet edit can be rolled out mechanically. `content_group` is what
+       the usage report at calcofi.io/analytics/ joins on. -->
+  <script>
+    // hostname guard: keeps local previews and forks out of the property,
+    // without depending on a build-system flag (these sites are built five
+    // different ways).
+    window.__CC_GA = location.hostname.endsWith("calcofi.io");
+  </script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-0HVK8TDMCF"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){ dataLayer.push(arguments); }
+    if (window.__CC_GA) {
+      gtag('js', new Date());
+      gtag('config', 'G-0HVK8TDMCF', { content_group: 'db-schema' });
+    }
+  </script>
 </head>
 <body>
 
