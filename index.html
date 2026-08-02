@@ -28,6 +28,18 @@ layout: default
   <span class="filter-bar-label muted">filter by dataset:</span>
   <span id="filter-chips" class="filter-chips"></span>
   <button id="filter-clear" class="filter-clear" type="button" hidden>clear ✕</button>
+  {%- comment -%}
+    Supplemental tables (obs_ctd_full ~212M scans, obs_mets_full) are hosted and
+    downloadable but are not what anyone means by "the schema" — they dominate
+    the ERD and the row counts while being an opt-in deep dive. Hidden by
+    default across ERD, Tables and Columns; the toggle is global because it is
+    one question, not three.
+  {%- endcomment -%}
+  <label id="supp-toggle-wrap" class="supp-toggle" hidden>
+    <input id="supp-toggle" type="checkbox">
+    <span>show supplemental</span>
+    <span class="supp-hint muted" id="supp-hint"></span>
+  </label>
 </div>
 
 <dialog id="notes-modal" class="notes-modal" aria-labelledby="notes-modal-title">
@@ -51,7 +63,13 @@ layout: default
 
 <section id="tab-tables" class="tab-panel" data-tab="tables" hidden>
   <div class="filter-row">
-    <input id="tables-filter" type="search" placeholder="filter tables…" autocomplete="off">
+    {%- comment -%}
+      A <select>, not a search box: substring search matched every table that
+      merely mentioned another in its description (obs and sample name each
+      other; every core table names dataset_key), so typing a name returned most
+      of the schema. Dataset filtering is the global chip bar above.
+    {%- endcomment -%}
+    <select id="tables-jump" class="tables-jump" aria-label="Jump to a table"></select>
     <span id="tables-count" class="muted"></span>
   </div>
   <div id="tables-list" class="cards-grid"></div>

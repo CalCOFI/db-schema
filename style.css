@@ -285,7 +285,9 @@ main#panel { padding: 1.0rem 1.5rem 4rem; }
 .erd-hint { font-size: 0.82rem; }
 
 /* ── ERD interactivity (clickable entities + filter highlight) ───────────── */
-#erd-svg-wrap g.erd-entity { cursor: pointer; }
+/* entities are hoverable for the tooltip but NOT clickable — panning the diagram
+   used to land a click on whatever entity was under the cursor and navigate away */
+#erd-svg-wrap g.erd-entity { cursor: default; }
 #erd-svg-wrap g.erd-entity:hover rect,
 #erd-svg-wrap g.erd-entity:hover path { stroke-width: 3px; filter: brightness(1.2); }
 /* highlight a table card briefly when arrived-at from an ERD entity click */
@@ -538,3 +540,19 @@ table.data .badge.canonical { color: var(--success); border-color: var(--success
     gap: 0.15rem;
   }
 }
+
+/* jump-to dropdown (replaced the Tables substring search) */
+.tables-jump {
+  font: inherit; font-size: 0.85rem;
+  padding: 0.3rem 0.45rem;
+  background: var(--panel-2); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 4px;
+  min-width: 15rem; max-width: 100%;
+}
+/* global supplemental toggle in the filter bar */
+.supp-toggle {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  margin-left: auto; font-size: 0.78rem; cursor: pointer; user-select: none;
+}
+.supp-toggle input { cursor: pointer; }
+.supp-hint { font-size: 0.72rem; }

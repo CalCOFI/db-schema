@@ -25,7 +25,22 @@ const State = window.SchemaApp = {
   filters:         new Set(), // active "provider_dataset" tag filters (OR across)
   datasetColor:    {},        // provider_dataset → hex (from metadata.erd_legend)
   _apply:          {},        // tab → fn re-applying text+tag filters for that tab
+  showSupplemental: false,    // supplemental tables hidden from ERD/Tables/Columns
 };
+
+// Supplemental tables (obs_ctd_full ~212M scans, obs_mets_full ~20M) are hosted
+// and downloadable, but they are an opt-in deep dive rather than part of "the
+// schema": left in, they dominate the ERD and every row count. Sourced from
+// catalog.json rather than a hardcoded list, so a newly-declared one is hidden
+// without editing this file.
+function supplementalTables(blobs) {
+  const c = blobs && blobs.catalog;
+  if (!c || !Array.isArray(c.tables)) return new Set();
+  return new Set(c.tables.filter(t => t.supplemental).map(t => t.name));
+}
+function isHiddenTable(name, blobs) {
+  return !State.showSupplemental && supplementalTables(blobs).has(name);
+}
 
 // ─── utility ────────────────────────────────────────────────────────────
 
@@ -175,6 +190,26 @@ function renderFilterBar(blobs) {
     return `<button type="button" class="filter-chip" data-dataset="${escHtml(d)}">${sw}${escHtml(d)}</button>`;
   }).join("");
   bar.hidden = false;
+
+  // supplemental toggle — only shown when this release actually has one
+  const supp = supplementalTables(blobs);
+  const tw = $("#supp-toggle-wrap");
+  if (tw) {
+    tw.hidden = supp.size === 0;
+    const hint = $("#supp-hint");
+    if (hint) hint.textContent = supp.size ? `(${[...supp].sort().join(", ")})` : "";
+    const cb = $("#supp-toggle");
+    if (cb && !cb.dataset.ccWired) {
+      cb.dataset.ccWired = "1";
+      cb.checked = State.showSupplemental;
+      cb.addEventListener("change", () => {
+        State.showSupplemental = cb.checked;
+        // every tab's content changes, so bust the render cache for all of them
+        State._rendered = {};
+        renderActiveTab(true);
+      });
+    }
+  }
   updateFilterBarUI();
 }
 
@@ -410,6 +445,41 @@ function renderErdLegend(blobs) {
      </span>`).join("");
 }
 
+// The ERD ships from the release with every table in it, supplemental included.
+// Filtering here rather than at release time means the toggle can put them back
+// without re-cutting a release. Mermaid ER syntax is line-oriented: an entity
+// block opens with `NAME {`, and relationships are a single line naming two
+// entities, so both are removable with a line filter.
+function erdSource(blobs) {
+  const hide = State.showSupplemental ? new Set() : supplementalTables(blobs);
+  if (!hide.size) return blobs.erd;
+  const out = [];
+  let skipDepth = 0;
+  for (const line of blobs.erd.split("\n")) {
+    if (skipDepth > 0) {                      // inside a hidden entity's block
+      if (/^\s*\}/.test(line)) skipDepth--;
+      continue;
+    }
+    const open = line.match(/^\s*([A-Za-z_][\w-]*)\s*\{\s*$/);
+    if (open && hide.has(open[1])) { skipDepth++; continue; }
+    // `class a,b,c styleName` — a styling directive listing every entity. Left
+    // naming a removed one, mermaid has a dangling reference, so prune the list
+    // rather than the line (and drop the line only if nothing is left).
+    const cls = line.match(/^(\s*class\s+)([\w,\s-]+?)(\s+\S+)\s*$/);
+    if (cls) {
+      const kept = cls[2].split(",").map(x => x.trim()).filter(x => x && !hide.has(x));
+      if (!kept.length) continue;
+      out.push(`${cls[1]}${kept.join(",")}${cls[3]}`);
+      continue;
+    }
+    // relationship line: drop it if it names a hidden entity as a whole token
+    if (/\|\||\}o|\|\{|o\{|\.\./.test(line) &&
+        [...hide].some(h => new RegExp(`(^|[^\\w-])${h}([^\\w-]|$)`).test(line))) continue;
+    out.push(line);
+  }
+  return out.join("\n");
+}
+
 async function renderErd(blobs) {
   renderErdLegend(blobs);
   const wrap = $("#erd-svg-wrap");
@@ -422,7 +492,7 @@ async function renderErd(blobs) {
   mermaid.initialize({ startOnLoad: false, theme, securityLevel: "loose" });
   let svg;
   try {
-    const { svg: rendered } = await mermaid.render(`erd-${Date.now()}`, blobs.erd);
+    const { svg: rendered } = await mermaid.render(`erd-${Date.now()}`, erdSource(blobs));
     svg = rendered;
   } catch (e) {
     wrap.innerHTML = `<div class="error" style="padding:1rem;color:var(--error)">Mermaid render failed: ${escHtml(e.message)}</div>`;
@@ -470,13 +540,12 @@ function decorateErdEntities(blobs) {
     const ds = tableDatasets(name, blobs);
     const dsLabel = ds.length ? ds.join(", ") : "—";
     const ttl = document.createElementNS("http://www.w3.org/2000/svg", "title");
-    ttl.textContent = `${name}\ndataset: ${dsLabel}\nclick for columns`;
+    ttl.textContent = `${name}\ndataset: ${dsLabel}`;
     g.appendChild(ttl);
-    g.addEventListener("click", (ev) => {
-      // svg-pan-zoom pans on drag; a real click (no drag) still fires here
-      ev.stopPropagation();
-      showTableColumns(name);
-    });
+    // NO click-to-navigate. svg-pan-zoom pans on drag and the mouseup still
+    // lands on whichever entity is under the cursor, so panning the diagram
+    // repeatedly threw the reader onto some unrelated table's columns. The
+    // Tables tab has its own jump-to dropdown; that is where navigation lives.
   });
 }
 
@@ -503,13 +572,11 @@ function applyErdHighlight(blobs) {
   });
 }
 
-// open a table's columns: switch to Tables tab, filter to it, expand + scroll
-function showTableColumns(name) {
+// expand a table's card and scroll to it (the Tables tab jump-to dropdown)
+function scrollToTableCard(name) {
   State.activeTab = "tables";
   setActiveTabUI("tables");
   renderActiveTab();
-  const input = $("#tables-filter");
-  if (input) { input.value = name; input.dispatchEvent(new Event("input")); }
   requestAnimationFrame(() => {
     const sel = `#tables-list .card[data-table-name="${(window.CSS && CSS.escape) ? CSS.escape(name) : name}"]`;
     const card = document.querySelector(sel);
@@ -530,7 +597,10 @@ function renderTables(blobs) {
   const meta = blobs.metadata;
   const catalog = blobs.catalog;
   const list = $("#tables-list");
-  const tables = Object.entries(meta.tables || {});
+  let tables = Object.entries(meta.tables || {});
+  // supplemental tables are excluded from the core view entirely — not merely
+  // chipped — unless the global toggle asks for them
+  tables = tables.filter(([name]) => !isHiddenTable(name, blobs));
   // sort: by name (provider+dataset chip handles grouping visually)
   tables.sort((a, b) => a[0].localeCompare(b[0]));
 
@@ -597,13 +667,24 @@ function renderTables(blobs) {
     `;
   }).join("");
 
-  // text + tag filter (registered so the filter bar + tab switches re-apply it)
+  // JUMP-TO dropdown, not a search box. Substring search over card text matched
+  // every table that merely *mentioned* another in its description — `obs` and
+  // `sample` name each other, every core table names dataset_key — so typing a
+  // table name returned most of the schema. A <select> of the actual names
+  // cannot do that.
+  const jump = $("#tables-jump");
+  if (jump) {
+    jump.innerHTML = `<option value="">jump to a table…</option>` +
+      tables.map(([name]) => `<option value="${escHtml(name)}">${escHtml(name)}</option>`).join("");
+    jump.onchange = () => { if (jump.value) scrollToTableCard(jump.value); };
+  }
+
+  // tag filter only (registered so the filter bar + tab switches re-apply it)
   const apply = () => {
-    const q = ($("#tables-filter").value || "").toLowerCase().trim();
     let visible = 0;
     $$("#tables-list .card").forEach(card => {
       const ds   = (card.dataset.datasets || "").split(" ").filter(Boolean);
-      const show = (!q || card.textContent.toLowerCase().includes(q)) && passesTags(ds);
+      const show = passesTags(ds);
       card.style.display = show ? "" : "none";
       if (show) visible++;
     });
@@ -611,7 +692,6 @@ function renderTables(blobs) {
     highlightContrib();
   };
   State._apply.tables = apply;
-  $("#tables-filter").oninput = apply;
   apply();
 }
 
@@ -624,7 +704,10 @@ function renderColumns(blobs) {
     if (!dsCache.has(tbl)) dsCache.set(tbl, tableDatasets(tbl, blobs));
     return dsCache.get(tbl);
   };
-  const all = Object.entries(meta.columns || {}).map(([key, c]) => {
+  const all = Object.entries(meta.columns || {}).filter(([key]) => {
+    const dot = key.indexOf(".");
+    return dot > 0 && !isHiddenTable(key.slice(0, dot), blobs);
+  }).map(([key, c]) => {
     const dot = key.indexOf(".");
     const table = key.slice(0, dot);
     return {
