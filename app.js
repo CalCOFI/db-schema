@@ -366,11 +366,9 @@ function bindHeader() {
       syncHash();
     });
   });
-  $("#theme-toggle").addEventListener("click", () => {
-    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem("theme", next);
-    // re-render ERD on theme change because mermaid bakes colors into the SVG
+  // the toggle itself is wired by brand/v1 theme.js; it announces a change on
+  // `cc:theme`, and the ERD re-renders because mermaid bakes colors into the SVG
+  document.addEventListener("cc:theme", () => {
     if (State.activeTab === "erd") renderActiveTab(true);
   });
   const notesModal = $("#notes-modal");
@@ -488,7 +486,7 @@ async function renderErd(blobs) {
     wrap.innerHTML = `<div class="muted" style="padding:1rem">erd.mmd not found for this release.</div>`;
     return;
   }
-  const theme = document.documentElement.dataset.theme === "light" ? "default" : "dark";
+  const theme = (window.ccTheme ? ccTheme.get() : document.documentElement.dataset.theme) === "light" ? "default" : "dark";
   mermaid.initialize({ startOnLoad: false, theme, securityLevel: "loose" });
   let svg;
   try {

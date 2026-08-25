@@ -6,14 +6,17 @@
   <title>{{ page.title | default: site.title }}</title>
   <meta name="description" content="{{ page.description | default: site.description }}">
 
-  <!-- apply saved theme before stylesheet load to avoid a flash -->
-  <script>
-    document.documentElement.dataset.theme =
-      localStorage.getItem("theme") || "dark";
-  </script>
-
-  <link rel="icon" type="image/png" sizes="32x32" href="{{ '/assets/favicon-32x32.png' | relative_url }}">
-  <link rel="icon" type="image/png" sizes="16x16" href="{{ '/assets/favicon-16x16.png' | relative_url }}">
+  <!-- calcofi.io brand contract — https://calcofi.io/brand/v1/ (head.html verbatim,
+       BEFORE the site stylesheet). The inline script sets the theme before first
+       paint; theme.js then owns the toggle, the cross-subdomain cookie and the
+       `cc:theme` event that app.js re-renders the ERD on. -->
+  <link rel="icon" type="image/x-icon" href="https://calcofi.io/brand/v1/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="https://calcofi.io/brand/v1/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="https://calcofi.io/brand/v1/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="https://calcofi.io/brand/v1/apple-touch-icon.png">
+  <script>(function(){var m=/[?&]theme=(dark|light)\b/.exec(location.search),c=/(?:^|;\s*)cc_theme=(dark|light)/.exec(document.cookie),s=null;try{s=localStorage.getItem("theme")}catch(e){}var t=(m&&m[1])||(c&&c[1])||(s==="light"||s==="dark"?s:null)||"dark",d=document.documentElement;d.dataset.theme=t;d.setAttribute("data-bs-theme",t);d.setAttribute("data-md-color-scheme",t==="dark"?"slate":"default");d.style.colorScheme=t})();</script>
+  <link rel="stylesheet" href="https://calcofi.io/brand/v1/theme.css">
+  <script defer src="https://calcofi.io/brand/v1/theme.js"></script>
   <link rel="stylesheet" href="{{ '/style.css' | relative_url }}">
 
   <!-- Google tag (gtag.js) — CalCOFI site property.
@@ -42,19 +45,19 @@
 
 <div id="layout">
 
-  <header class="app-header">
-    <a class="app-logo" href="{{ '/' | relative_url }}" aria-label="CalCOFI Schema — home">
-      <img class="logo-dark"  src="{{ '/assets/logo_calcofi.svg'       | relative_url }}" alt="CalCOFI" width="32" height="32">
-      <img class="logo-light" src="{{ '/assets/logo_calcofi_light.svg' | relative_url }}" alt="CalCOFI" width="32" height="32">
+  <header class="cc-header">
+    <a class="cc-home" href="https://calcofi.io" aria-label="CalCOFI.io home">
+      <img class="cc-logo-dark"  src="https://calcofi.io/brand/v1/logo_calcofi.svg"       alt="CalCOFI" width="32" height="32">
+      <img class="cc-logo-light" src="https://calcofi.io/brand/v1/logo_calcofi_light.svg" alt="CalCOFI" width="32" height="32">
     </a>
-    <h1>{{ site.title }}</h1>
+    <a class="cc-title" href="{{ '/' | relative_url }}">{{ site.title }}</a>
 
     <label class="version-picker">
       <span class="vp-label">release</span>
       <select id="version-select" aria-label="Release version"></select>
     </label>
 
-    <span class="spacer"></span>
+    <span class="cc-spacer"></span>
 
     <nav class="tab-nav" role="tablist">
       <button role="tab" data-tab="erd"          class="tab active">Diagram</button>
@@ -64,13 +67,13 @@
       <button role="tab" data-tab="measurements" class="tab">Measurements</button>
     </nav>
 
-    <button id="theme-toggle" type="button" aria-label="Toggle dark / light theme">🌓</button>
+    <button class="cc-theme-toggle" type="button" aria-label="Toggle dark / light theme">🌓</button>
   </header>
 
   <main id="panel">
     <div id="status" class="status muted">Loading…</div>
     {{ content }}
-    <footer class="app-footer">
+    <footer class="cc-footer">
       <p>
         Source · <a href="https://github.com/CalCOFI/db-schema">CalCOFI/db-schema</a>
         · Data · <a href="https://storage.googleapis.com/calcofi-db/ducklake/releases/">release sidecars on GCS</a>
