@@ -544,4 +544,5 @@ table.data .badge.canonical { color: var(--success); border-color: var(--success
 /* content-addressed catalog chips on table cards (v2026.09+ catalogs only) */
 .card .card-meta .chip.chip-since.changed { color: var(--success); border-color: var(--success); }
 .card .card-meta .chip.chip-hash { cursor: help; letter-spacing: 0.02em; }
+.card .card-meta .chip.chip-twin { cursor: help; }
 .ds-tables .since { font-size: 0.75rem; }

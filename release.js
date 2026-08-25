@@ -11,12 +11,18 @@
 //   legacy    (≤ v2026.08.25)  tables[] = {name, rows, partitioned, supplemental}
 //   canonical (≥ v2026.09)     + content_hash (whole-table signature), compat_path,
 //                              objects[] = {path, bytes, sha256, content_hash,
-//                              since, partition_by?, partition_value?} — one per
-//                              table, or one per partition; plus catalog-level
-//                              layout ("compat"|"canonical") and writer.
+//                              since, compat_path, partition_by?, partition_value?}
+//                              — one per table, or one per partition; plus
+//                              catalog-level layout ("compat"|"canonical") and writer.
 //
 // `since` on an object is the first release that shipped those exact bytes, so
 // "since === this version" is the per-table (per-partition) changelog.
+//
+// A partitioned table may also publish a single-file "twin" (obs does): it is
+// the object WITHOUT partition_by on a table whose other objects have one.
+// It is a duplicate of the partitions, so it is never a partition: sinceStats()
+// and tableBytes() leave it out ("1 of 2 partitions changed" stays 1 of 2) and
+// twinInfo() / summarizeTwin() report it on its own.
 //
 // versions.json entries may carry `consolidated: true` (parquet kept
 // indefinitely) and `retired: {retired_utc, to, reason}` (parquet removed by
@@ -42,12 +48,49 @@ export function tableObjects(t) {
   return (t && Array.isArray(t.objects)) ? t.objects.filter(Boolean) : [];
 }
 
-// table-level `bytes` when the writer stamps it, else the sum over objects[];
-// null for a legacy entry (nothing to show)
+// the objects that ARE the table: every partition when any object carries
+// partition_by (the rest are twins), else all of them (single-object table)
+export function partitionObjects(t) {
+  const objs  = tableObjects(t);
+  const parts = objs.filter(o => o.partition_by != null);
+  return parts.length ? parts : objs;
+}
+
+// the single-file twin of a partitioned table — the object without
+// partition_by beside objects that have one; null otherwise (a lone object on
+// a non-partitioned table is the table, not a twin)
+export function twinInfo(t) {
+  const objs = tableObjects(t);
+  if (!objs.some(o => o.partition_by != null)) return null;
+  return objs.find(o => o.partition_by == null) || null;
+}
+
+export function fmtBytes(n) {
+  if (!n) return "—";
+  const u = ["B","KB","MB","GB","TB"];
+  let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return `${n.toFixed(n >= 100 ? 0 : 1)} ${u[i]}`;
+}
+
+// "+ single-file copy (1.9 KB, since v2026.09.01)" for a table with a twin,
+// else null
+export function summarizeTwin(t) {
+  const tw = twinInfo(t);
+  if (!tw) return null;
+  const bits = [];
+  if (typeof tw.bytes === "number") bits.push(fmtBytes(tw.bytes));
+  if (tw.since) bits.push(`since ${tw.since}`);
+  return `+ single-file copy${bits.length ? ` (${bits.join(", ")})` : ""}`;
+}
+
+// table-level `bytes` when the writer stamps it, else the sum over the
+// partition objects (a twin is a duplicate, not more table); null for a legacy
+// entry (nothing to show)
 export function tableBytes(t) {
   if (!t) return null;
   if (typeof t.bytes === "number") return t.bytes;
-  const sized = tableObjects(t).filter(o => typeof o.bytes === "number");
+  const sized = partitionObjects(t).filter(o => typeof o.bytes === "number");
   return sized.length ? sized.reduce((s, o) => s + o.bytes, 0) : null;
 }
 
@@ -64,11 +107,12 @@ export function partitionLabel(o) {
   return String(o.path || "").split("/").pop() || "";
 }
 
-// per-table change summary for `version` (normally the catalog's own):
+// per-table change summary for `version` (normally the catalog's own), over
+// the partition objects only (a twin is reported by summarizeTwin):
 //   {n_objects, n_changed, since_max, changed: [labels], partitioned}
 // or null when no object carries `since` (legacy catalog)
 export function sinceStats(t, version) {
-  const objs  = tableObjects(t);
+  const objs  = partitionObjects(t);
   const dated = objs.filter(o => o.since);
   if (!dated.length) return null;
   const changed = dated.filter(o => o.since === version);

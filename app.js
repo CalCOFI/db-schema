@@ -12,8 +12,9 @@
 // flags) live in release.js, which has no DOM so `node --test` can cover them.
 
 import {
-  summarizeSince, sinceStats, tableBytes, shortHash, catalogTotals,
-  versionEntry, isConsolidated, retiredInfo, retiredDate, pickerLabel,
+  summarizeSince, sinceStats, summarizeTwin, twinInfo, tableBytes, shortHash,
+  fmtBytes, catalogTotals, versionEntry, isConsolidated, retiredInfo,
+  retiredDate, pickerLabel,
 } from "./release.js";
 
 const $  = (s, r = document) => r.querySelector(s);
@@ -71,13 +72,7 @@ async function fetchJson(url) {
   return r.json();
 }
 
-function fmtBytes(n) {
-  if (!n) return "—";
-  const u = ["B","KB","MB","GB","TB"];
-  let i = 0;
-  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
-  return `${n.toFixed(n >= 100 ? 0 : 1)} ${u[i]}`;
-}
+// fmtBytes lives in release.js (the twin chip text needs it there)
 function fmtInt(n) {
   if (n == null) return "—";
   return Number(n).toLocaleString();
@@ -665,9 +660,10 @@ function catalogByName(catalog) {
 }
 
 // content-addressed chips (v2026.09+ catalogs): parquet size, what changed in
-// this version, and the whole-table content_hash prefix (full hash in the
-// tooltip). Each comes back empty for a legacy entry, so older releases render
-// exactly as before.
+// this version, the whole-table content_hash prefix (full hash + compat_path in
+// the tooltip) and, for a partitioned table that also ships a single-file
+// twin, that copy on its own chip. Each comes back empty for a legacy entry,
+// so older releases render exactly as before.
 function catalogChips(ct, version) {
   if (!ct) return "";
   const out   = [];
@@ -684,7 +680,21 @@ function catalogChips(ct, version) {
     out.push(`<span class="chip chip-since${s.n_changed ? " changed" : ""}" title="${escHtml(tip)}">${escHtml(since)}</span>`);
   }
   const hash = shortHash(ct.content_hash);
-  if (hash) out.push(`<span class="chip chip-hash" title="content_hash ${escHtml(ct.content_hash)} — whole-table signature; equal across releases when the bytes are">${escHtml(hash)}</span>`);
+  if (hash) {
+    const compat = ct.compat_path || ((ct.objects || []).find(o => o && o.compat_path) || {}).compat_path;
+    const tip = `content_hash ${ct.content_hash} — whole-table signature; equal across releases when the bytes are`
+              + (compat ? `\ncompat_path: ${compat}` : "");
+    out.push(`<span class="chip chip-hash" title="${escHtml(tip)}">${escHtml(hash)}</span>`);
+  }
+  const twin = summarizeTwin(ct);
+  if (twin) {
+    const tw  = twinInfo(ct);
+    const tip = [`single-file copy of the partitioned table`,
+                 tw.content_hash ? `content_hash ${tw.content_hash}` : "",
+                 tw.path         ? `path: ${tw.path}` : "",
+                 tw.compat_path  ? `compat_path: ${tw.compat_path}` : ""].filter(Boolean).join("\n");
+    out.push(`<span class="chip chip-twin" title="${escHtml(tip)}">${escHtml(twin)}</span>`);
+  }
   return out.join("");
 }
 

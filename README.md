@@ -15,7 +15,7 @@ version stays browsable here:
 | `erd.mmd`             | Diagram       | Mermaid string from `cc_erd()`     |
 | `metadata.json`       | Tables, Columns, Datasets, Measurements | descriptions + units + types |
 | `relationships.json`  | (driver of `erd.mmd`) |                            |
-| `catalog.json`        | release-meta header, Tables | row counts + total size. From v2026.09 also `layout` / `writer` and, per table, `content_hash` + `objects[]` (`path`, `bytes`, `sha256`, `content_hash`, `since`, `partition_by`/`partition_value`) — rendered as size, "what changed" and hash chips |
+| `catalog.json`        | release-meta header, Tables | row counts + total size. From v2026.09 also `layout` / `writer` and, per table, `content_hash` + `objects[]` (`path`, `bytes`, `sha256`, `content_hash`, `since`, `compat_path`, `partition_by`/`partition_value`) — rendered as size, "what changed", hash and single-file-twin chips |
 | `RELEASE_NOTES.md`    | release-meta header | inline rendered with marked; "all releases ↗" opens `../RELEASES.md` |
 | `versions.json` + `latest.txt` (one folder up) | version dropdown | `consolidated` and `retired: {retired_utc, to, reason}` mark the picker and the header |
 
@@ -35,7 +35,12 @@ Tables tab shows it as:
 - **partitioned** — `3 of 96 partitions changed in this version` (the tooltip
   names the partitions), else `unchanged since …` (the newest partition's `since`)
 - the humanized `bytes` and the first 8 characters of the whole-table
-  `content_hash` (full hash in the tooltip)
+  `content_hash` (full hash + `compat_path`, the legacy per-release path, in
+  the tooltip)
+- a partitioned table that also publishes a single-file **twin** (`obs` does)
+  lists it in `objects[]` as the object *without* `partition_by`. It is a
+  duplicate, not a partition — it is left out of the counts and the table
+  size and shown on its own chip: `+ single-file copy (1.9 KB, since v2026.09.01)`
 
 Catalogs before v2026.09 (including `v2026.08.25`) have none of these fields
 and render exactly as before — the helpers return nothing rather than a
@@ -49,7 +54,7 @@ banner naming the nearest kept version (`to`) to read instead, linked so one
 click switches to it. The page keeps working for a retired version because it
 only ever reads sidecars.
 
-The pure logic behind all of this — `summarizeSince()`, `tableBytes()`,
+The pure logic behind all of this — `summarizeSince()`, `summarizeTwin()`, `tableBytes()`,
 `shortHash()`, `pickerLabel()`, `retiredInfo()` … — is `release.js` (no DOM),
 tested against copies of calcofi4r's fixture catalogs:
 
