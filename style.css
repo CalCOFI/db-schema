@@ -54,8 +54,7 @@ code, .mono { font-family: var(--mono); font-size: 0.9em; }
   font-size: 0.85rem;
 }
 .version-picker .vp-label {
-  color: var(--muted);
-  font-family: var(--mono);
+  font-family: var(--mono); font-size: 0.76rem; color: var(--muted);
 }
 #version-select {
   background: var(--panel-2);
