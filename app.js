@@ -7,7 +7,14 @@
 // Measurement types. Vanilla ES module — no framework, no DuckDB-WASM.
 //
 // State is intentionally global on `window.SchemaApp` so the browser
-// devtools can poke at it.
+// devtools can poke at it. The pure catalog.json / versions.json helpers
+// (since summaries, bytes, hash prefix, picker labels, retired/consolidated
+// flags) live in release.js, which has no DOM so `node --test` can cover them.
+
+import {
+  summarizeSince, sinceStats, tableBytes, shortHash, catalogTotals,
+  versionEntry, isConsolidated, retiredInfo, retiredDate, pickerLabel,
+} from "./release.js";
 
 const $  = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -243,17 +250,10 @@ async function init() {
 
   // populate dropdown
   const sel = $("#version-select");
+  // label rules (★ latest, date only when it differs from the CalVer,
+  // "(retired)" / "(consolidated)" from versions.json) are pickerLabel()
   sel.innerHTML = State.versions
-    .map(v => {
-      const isLatest = v.version === State.latestVersion;
-      // version is CalVer (vYYYY.MM.DD) so it already encodes the release date;
-      // only append the date when it genuinely differs (e.g. a same-version
-      // re-release on a later day) — otherwise it's redundant noise
-      const verDate  = v.version.replace(/^v/, "").replace(/\./g, "-");
-      const dateBit  = (v.release_date && v.release_date !== verDate) ? ` · ${v.release_date}` : "";
-      const star     = isLatest ? "★ " : "";
-      return `<option value="${escHtml(v.version)}">${star}${escHtml(v.version)}${escHtml(dateBit)}</option>`;
-    })
+    .map(v => `<option value="${escHtml(v.version)}">${escHtml(pickerLabel(v, State.latestVersion))}</option>`)
     .join("");
 
   // resolve initial version + tab from URL hash, else fall back to latest
@@ -288,7 +288,15 @@ function syncHash() {
 // ─── per-version fetch ──────────────────────────────────────────────────
 
 async function loadVersion(version) {
-  if (State.byVersion.has(version)) return State.byVersion.get(version);
+  if (State.byVersion.has(version)) {
+    // cached blobs still need the header re-painted: switching A → B → A used
+    // to leave B's version/date/rows, filter bar — and now B's retired banner —
+    // on screen, because only the fetch path ever called renderReleaseMeta()
+    const cached = State.byVersion.get(version);
+    setStatus(`${version} loaded`, "muted");
+    renderReleaseMeta(version, cached);
+    return cached;
+  }
   setStatus(`Loading ${version}…`);
   const base = `${GCS}/${encodeURIComponent(version)}`;
   // notes + relationships + erd are optional; metadata + catalog are required
@@ -319,12 +327,18 @@ async function loadVersion(version) {
 function renderReleaseMeta(version, blobs) {
   const meta    = blobs.metadata;
   const catalog = blobs.catalog;
+  // totals fall back to sums over tables[] (a canonical catalog may omit them)
+  const totals  = catalogTotals(catalog);
   $("#rm-version").textContent = version;
   $("#rm-date").textContent    = (meta && meta.release_date) || (catalog && catalog.release_date) || "—";
-  $("#rm-tables").textContent  = (catalog && Array.isArray(catalog.tables)) ? catalog.tables.length : "—";
-  $("#rm-rows").textContent    = fmtInt(catalog && catalog.total_rows);
-  $("#rm-size").textContent    = fmtBytes(catalog && catalog.total_size);
+  $("#rm-tables").textContent  = catalog ? totals.tables : "—";
+  $("#rm-rows").textContent    = fmtInt(totals.rows);
+  $("#rm-size").textContent    = fmtBytes(totals.bytes);
+  renderVersionFlags(version, catalog);
   $("#release-meta-panel").hidden = false;
+  // RELEASES.md (one folder up) is the cross-release changelog that every
+  // per-version RELEASE_NOTES.md is a section of; honour the GCS base override
+  for (const a of $$("a.releases-md-link")) a.href = `${GCS}/RELEASES.md`;
 
   // modal body — populated here so opening the dialog is just .showModal()
   $("#notes-modal-version").textContent = version;
@@ -343,20 +357,70 @@ function renderReleaseMeta(version, blobs) {
   renderFilterBar(blobs);
 }
 
+// `consolidated` / `retired` come from versions.json (known before the version
+// is loaded); `layout` from catalog.json. A retired version's parquet is gone
+// but its sidecars are not, so the page keeps working — the banner says which
+// kept version to read instead and links to it in the picker.
+function renderVersionFlags(version, catalog) {
+  const entry   = versionEntry(State.versions, version);
+  const retired = retiredInfo(entry);
+  const flags   = [];
+  if (isConsolidated(entry)) {
+    flags.push(`<span class="rm-flag consolidated" title="Consolidated release: its parquet is kept indefinitely, never removed by archive thinning.">consolidated</span>`);
+  }
+  if (retired) {
+    flags.push(`<span class="rm-flag retired" title="Parquet removed by archive thinning${retiredDate(retired) ? ` on ${escHtml(retiredDate(retired))}` : ""}; sidecars only.">retired</span>`);
+  }
+  if (catalog && catalog.layout) {
+    flags.push(`<span class="rm-flag layout" title="catalog.json layout: ${escHtml(catalog.layout)}. Parquet is content-addressed — each table's objects[] carry bytes, content_hash and the release (since) that first shipped those bytes; the Tables tab shows them.">${escHtml(catalog.layout)}</span>`);
+  }
+  const fl = $("#rm-flags");
+  if (fl) fl.innerHTML = flags.join("");
+
+  const banner = $("#retired-banner");
+  if (!banner) return;
+  if (!retired) { banner.hidden = true; banner.innerHTML = ""; return; }
+  const to     = retired.to ? String(retired.to) : "";
+  const known  = to && State.versions.some(v => v.version === to);
+  const toHtml = !to   ? `<span class="muted">(no replacement recorded)</span>`
+               : known ? `<a href="#${escHtml(State.activeTab)}?v=${encodeURIComponent(to)}" data-goto-version="${escHtml(to)}">${escHtml(to)}</a>`
+               :         `<span class="mono">${escHtml(to)}</span>`;
+  const when   = retiredDate(retired);
+  const reason = retired.reason ? ` <span class="reason">(${escHtml(retired.reason)})</span>` : "";
+  banner.innerHTML = `<strong>Data retired${when ? ` ${escHtml(when)}` : ""}</strong> — parquet removed; read ${toHtml}${reason}.`
+                   + ` <span class="muted">What is shown here is this version's schema, notes and relationships from its sidecars.</span>`;
+  banner.hidden = false;
+}
+
 // ─── header / tab wiring ────────────────────────────────────────────────
 
+// switch the active release: the picker's change event, or the retired
+// banner's "read vX" link
+async function switchVersion(version) {
+  if (!version || !State.versions.some(v => v.version === version)) return;
+  State.activeVersion = version;
+  const sel = $("#version-select");
+  if (sel && sel.value !== version) sel.value = version;
+  await loadVersion(version);
+  // a version switch changes every tab's data; drop ALL per-tab render caches
+  // so each tab rebuilds fresh on next view (not just the active one). Without
+  // this, a previously-viewed tab keeps the prior version's DOM while the
+  // rebuilt filter bar advertises the new version's datasets → filtering by a
+  // dataset absent from the stale DOM silently matches nothing.
+  State._rendered = {};
+  renderActiveTab(true);
+  syncHash();
+}
+
 function bindHeader() {
-  $("#version-select").addEventListener("change", async (e) => {
-    State.activeVersion = e.target.value;
-    await loadVersion(State.activeVersion);
-    // a version switch changes every tab's data; drop ALL per-tab render caches
-    // so each tab rebuilds fresh on next view (not just the active one). Without
-    // this, a previously-viewed tab keeps the prior version's DOM while the
-    // rebuilt filter bar advertises the new version's datasets → filtering by a
-    // dataset absent from the stale DOM silently matches nothing.
-    State._rendered = {};
-    renderActiveTab(true);
-    syncHash();
+  $("#version-select").addEventListener("change", (e) => switchVersion(e.target.value));
+  // the banner link switches the picker rather than navigating (nothing listens
+  // to hashchange); its href is still a real deep link for copying
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest("a[data-goto-version]");
+    if (!a) return;
+    e.preventDefault();
+    switchVersion(a.dataset.gotoVersion);
   });
   $$("nav.tab-nav .tab").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -591,6 +655,39 @@ function scrollToTableCard(name) {
 
 // ─── Tables ─────────────────────────────────────────────────────────────
 
+// catalog.json tables[] by name (empty for a missing catalog)
+function catalogByName(catalog) {
+  const m = new Map();
+  for (const t of (catalog && Array.isArray(catalog.tables)) ? catalog.tables : []) {
+    if (t && t.name) m.set(t.name, t);
+  }
+  return m;
+}
+
+// content-addressed chips (v2026.09+ catalogs): parquet size, what changed in
+// this version, and the whole-table content_hash prefix (full hash in the
+// tooltip). Each comes back empty for a legacy entry, so older releases render
+// exactly as before.
+function catalogChips(ct, version) {
+  if (!ct) return "";
+  const out   = [];
+  const bytes = tableBytes(ct);
+  if (bytes != null) out.push(`<span class="chip" title="parquet bytes for this table">${fmtBytes(bytes)}</span>`);
+  const since = summarizeSince(ct, version);
+  if (since) {
+    const s   = sinceStats(ct, version);
+    const cap = 30;
+    const tip = (s.n_changed && s.partitioned)
+      ? `changed in ${version}: ${s.changed.slice(0, cap).join(", ")}${s.changed.length > cap ? ` … +${s.changed.length - cap} more` : ""}`
+      : s.n_changed ? `these bytes were first shipped by ${version}`
+                    : `these bytes were first shipped by ${s.since_max}; ${version} re-uses them`;
+    out.push(`<span class="chip chip-since${s.n_changed ? " changed" : ""}" title="${escHtml(tip)}">${escHtml(since)}</span>`);
+  }
+  const hash = shortHash(ct.content_hash);
+  if (hash) out.push(`<span class="chip chip-hash" title="content_hash ${escHtml(ct.content_hash)} — whole-table signature; equal across releases when the bytes are">${escHtml(hash)}</span>`);
+  return out.join("");
+}
+
 function renderTables(blobs) {
   const meta = blobs.metadata;
   const catalog = blobs.catalog;
@@ -602,14 +699,8 @@ function renderTables(blobs) {
   // sort: by name (provider+dataset chip handles grouping visually)
   tables.sort((a, b) => a[0].localeCompare(b[0]));
 
-  const rowsByTable = new Map();
-  const suppByTable = new Set();
-  if (catalog && Array.isArray(catalog.tables)) {
-    for (const t of catalog.tables) {
-      rowsByTable.set(t.name, t.rows);
-      if (t.supplemental) suppByTable.add(t.name);
-    }
-  }
+  const catByTable  = catalogByName(catalog);
+  const suppByTable = supplementalTables(blobs);
 
   // build a per-table column index from metadata.columns ("table.column" key)
   const colsByTable = new Map();
@@ -625,7 +716,8 @@ function renderTables(blobs) {
   const knownDatasets = new Set(Object.keys(meta.datasets || {}));
   list.innerHTML = tables.map(([name, t]) => {
     const cols = colsByTable.get(name) || [];
-    const rows = rowsByTable.get(name);
+    const ct   = catByTable.get(name);
+    const rows = ct ? ct.rows : null;
     const ds   = tableDatasets(name, blobs);
     // one chip per dataset this table belongs to (shared tables get several);
     // clickable only for registered datasets so it ties into the filter bar
@@ -644,6 +736,7 @@ function renderTables(blobs) {
           ${dsChips}
           ${rows != null ? `<span class="chip">${fmtInt(rows)} rows</span>` : ""}
           <span class="chip">${cols.length} cols</span>
+          ${catalogChips(ct, State.activeVersion)}
           ${suppByTable.has(name) ? `<span class="chip chip-supp" title="Supplemental table: hosted + downloadable and tagged to this release, but excluded from the ERD and hidden by cc_get_db() unless supplemental=TRUE.">supplemental</span>` : ""}
         </div>
         ${contribBar(name, blobs)}
@@ -804,6 +897,7 @@ function renderDatasets(blobs) {
     }
   }
 
+  const catByTable = catalogByName(blobs.catalog);
   const datasetTablesHtml = (key, d) => {
     const items  = contribByDs[key] || [];
     const byName = new Map(items.map(it => [it.table, it]));
@@ -813,11 +907,14 @@ function renderDatasets(blobs) {
       const it   = byName.get(tbl);
       const rows = it && it.rows != null ? ` — ${fmtInt(it.rows)} rows` : "";
       const pct  = (it && tableShared[tbl]) ? ` <span class="muted">(${it.pct}%)</span>` : "";
+      // per-table "what changed" from a content-addressed catalog; empty for legacy
+      const since = summarizeSince(catByTable.get(tbl), State.activeVersion);
+      const sn   = since ? ` <span class="muted since">· ${escHtml(since)}</span>` : "";
       const wf   = (it && it.workflow && it.workflow !== "NA")
         ? ` <a class="ds-wf" href="${escHtml(it.workflow)}" target="_blank" title="ingest workflow">↗</a>` : "";
       // for tables this dataset shares with others, show the full composition bar
       const bar  = tableShared[tbl] ? contribBar(tbl, blobs) : "";
-      return `<li><span class="mono">${escHtml(tbl)}</span>${rows}${pct}${wf}${bar}</li>`;
+      return `<li><span class="mono">${escHtml(tbl)}</span>${rows}${pct}${sn}${wf}${bar}</li>`;
     }).join("");
     return `<details class="ds-tables"><summary>${names.length} tables ▾</summary><ul>${li}</ul></details>`;
   };

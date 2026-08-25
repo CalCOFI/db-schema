@@ -6,20 +6,57 @@ ER diagram, datasets and measurement types — at
 
 The site is a static Jekyll page that consumes the per-release sidecars
 uploaded to `gs://calcofi-db/ducklake/releases/{version}/` by
-[CalCOFI/workflows](https://github.com/CalCOFI/workflows):
+[CalCOFI/workflows](https://github.com/CalCOFI/workflows). A release's parquet
+may be removed later by archive thinning; its sidecars never are, so every
+version stays browsable here:
 
 | File                  | Tab           | Notes                              |
 |-----------------------|---------------|------------------------------------|
 | `erd.mmd`             | Diagram       | Mermaid string from `cc_erd()`     |
 | `metadata.json`       | Tables, Columns, Datasets, Measurements | descriptions + units + types |
 | `relationships.json`  | (driver of `erd.mmd`) |                            |
-| `catalog.json`        | release-meta header | row counts + total size      |
-| `RELEASE_NOTES.md`    | release-meta header | inline rendered with marked |
-| `versions.json` + `latest.txt` (one folder up) | version dropdown |               |
+| `catalog.json`        | release-meta header, Tables | row counts + total size. From v2026.09 also `layout` / `writer` and, per table, `content_hash` + `objects[]` (`path`, `bytes`, `sha256`, `content_hash`, `since`, `partition_by`/`partition_value`) — rendered as size, "what changed" and hash chips |
+| `RELEASE_NOTES.md`    | release-meta header | inline rendered with marked; "all releases ↗" opens `../RELEASES.md` |
+| `versions.json` + `latest.txt` (one folder up) | version dropdown | `consolidated` and `retired: {retired_utc, to, reason}` mark the picker and the header |
 
 Switching the version dropdown re-fetches the per-version files and
 re-renders the active tab. Default version = whatever `latest.txt` points
 at (gated by `test_release.qmd` in the workflows repo).
+
+## Content-addressed releases (v2026.09 and later)
+
+From v2026.09 the parquet is content-addressed: `catalog.json` lists, for each
+table, one object (or one per partition) with its `bytes`, `sha256`,
+`content_hash` and `since` — the first release that shipped those exact
+bytes. `since` is therefore the per-table (per-partition) changelog, and the
+Tables tab shows it as:
+
+- **single object** — `changed in this version` or `unchanged since v2026.08.25`
+- **partitioned** — `3 of 96 partitions changed in this version` (the tooltip
+  names the partitions), else `unchanged since …` (the newest partition's `since`)
+- the humanized `bytes` and the first 8 characters of the whole-table
+  `content_hash` (full hash in the tooltip)
+
+Catalogs before v2026.09 (including `v2026.08.25`) have none of these fields
+and render exactly as before — the helpers return nothing rather than a
+placeholder.
+
+`versions.json` carries two markers per version: `consolidated: true` (parquet
+kept indefinitely; a `consolidated` chip in the header, `(consolidated)` in the
+picker) and `retired: {retired_utc, to, reason}` for a version whose parquet
+archive thinning removed — the picker says `(retired)` and the header shows a
+banner naming the nearest kept version (`to`) to read instead, linked so one
+click switches to it. The page keeps working for a retired version because it
+only ever reads sidecars.
+
+The pure logic behind all of this — `summarizeSince()`, `tableBytes()`,
+`shortHash()`, `pickerLabel()`, `retiredInfo()` … — is `release.js` (no DOM),
+tested against copies of calcofi4r's fixture catalogs:
+
+```bash
+node --check app.js release.js
+node --test                       # test/release.test.js
+```
 
 ## Local development
 
@@ -30,7 +67,9 @@ bundle exec jekyll serve --baseurl ""
 ```
 
 The site fetches everything from public GCS, so you can iterate on the
-UI against live release data with no auth.
+UI against live release data with no auth. `window.SCHEMA_GCS_BASE`
+(set from `_config.yml`'s `gcs_releases_base` in the layout) is the one
+knob for pointing it at a different bucket or a local mirror.
 
 ## Sibling sites
 

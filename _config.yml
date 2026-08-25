@@ -34,3 +34,4 @@ exclude:
   - node_modules
   - .bundle
   - .jekyll-cache
+  - test         # node --test fixtures for release.js; not site content

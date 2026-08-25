@@ -12,6 +12,7 @@ layout: default
 <div id="release-meta-panel" hidden>
   <div class="release-meta-row">
     <span class="rm-key">version</span> <span id="rm-version"></span>
+    <span id="rm-flags" class="rm-flags"></span>
     <span class="rm-sep">·</span>
     <span class="rm-key">released</span> <span id="rm-date"></span>
     <span class="rm-sep">·</span>
@@ -21,7 +22,19 @@ layout: default
     <span class="rm-sep">·</span>
     <span class="rm-key">size</span> <span id="rm-size"></span>
     <button id="rm-notes-toggle" class="rm-notes-toggle" type="button">release notes</button>
+    {%- comment -%}
+      RELEASES.md is the cross-release changelog (one section per version, plus
+      what a release is made of); app.js re-points the href at the configured
+      GCS base so the SCHEMA_GCS_BASE override still applies.
+    {%- endcomment -%}
+    <a class="rm-releases-link releases-md-link" href="{{ site.gcs_releases_base }}/RELEASES.md" target="_blank" rel="noopener" title="RELEASES.md — what changed between database releases, and why">all releases ↗</a>
   </div>
+  {%- comment -%}
+    Shown for a version whose parquet was removed by archive thinning
+    (versions.json `retired`); its sidecars remain so the page still works.
+    Populated by app.js renderVersionFlags().
+  {%- endcomment -%}
+  <div id="retired-banner" class="retired-banner" role="alert" hidden></div>
 </div>
 
 <div id="global-filter-bar" class="filter-bar" hidden>
@@ -45,6 +58,7 @@ layout: default
 <dialog id="notes-modal" class="notes-modal" aria-labelledby="notes-modal-title">
   <div class="notes-modal-header">
     <h2 id="notes-modal-title">Release notes · <span id="notes-modal-version"></span></h2>
+    <a class="notes-modal-all releases-md-link" href="{{ site.gcs_releases_base }}/RELEASES.md" target="_blank" rel="noopener" title="RELEASES.md — every release's notes in one file">all releases ↗</a>
     <button id="notes-modal-close" class="notes-modal-close" type="button" aria-label="Close">×</button>
   </div>
   <div id="notes-modal-body" class="notes-modal-body"></div>

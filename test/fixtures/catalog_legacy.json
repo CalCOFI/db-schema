@@ -1,0 +1,9 @@
+{
+  "version": "v2026.08.14",
+  "release_date": "2026-08-14",
+  "tables": [
+    {"name": "cruise", "rows": 700, "partitioned": false, "supplemental": false},
+    {"name": "obs", "rows": 3000000, "partitioned": true, "supplemental": false},
+    {"name": "obs_ctd_full", "rows": 216000000, "partitioned": true, "supplemental": true}
+  ]
+}

@@ -502,3 +502,46 @@ table.data .badge.canonical { color: var(--success); border-color: var(--success
 }
 .supp-toggle input { cursor: pointer; }
 .supp-hint { font-size: 0.72rem; }
+
+/* ── release flags + retired banner (versions.json consolidated / retired) ── */
+
+.rm-flags:empty { display: none; }
+.rm-flag {
+  display: inline-block;
+  margin-left: 0.15rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 0.72rem; line-height: 1.55;
+  cursor: help;
+}
+.rm-flag.consolidated { color: var(--success); border-color: var(--success); }
+.rm-flag.retired      { color: var(--error);   border-color: var(--error); }
+.rm-releases-link, .notes-modal-all {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.rm-releases-link { margin-left: 0.5rem; }
+.rm-releases-link:hover, .notes-modal-all:hover { color: var(--accent); }
+.retired-banner {
+  margin-top: 0.55rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--error) 55%, var(--border));
+  background: color-mix(in srgb, var(--error) 12%, var(--panel));
+  border-radius: 4px;
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  color: var(--fg);
+}
+.retired-banner a { color: var(--accent); font-family: var(--mono); }
+.retired-banner .reason { color: var(--muted); }
+
+/* content-addressed catalog chips on table cards (v2026.09+ catalogs only) */
+.card .card-meta .chip.chip-since.changed { color: var(--success); border-color: var(--success); }
+.card .card-meta .chip.chip-hash { cursor: help; letter-spacing: 0.02em; }
+.ds-tables .since { font-size: 0.75rem; }

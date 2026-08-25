@@ -1,0 +1,41 @@
+{
+  "version": "v2026.09.01",
+  "release_date": "2026-09-01",
+  "layout": "canonical",
+  "writer": {"compression": "zstd", "row_group_size": 122880, "parquet_version": "V1"},
+  "tables": [
+    {
+      "name": "cruise", "rows": 700, "partitioned": false, "supplemental": false,
+      "content_hash": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+      "compat_path": "ducklake/releases/v2026.09.01/parquet/cruise.parquet",
+      "objects": [
+        {"path": "ducklake/tables/cruise/a1b2c3d4e5f60718293a4b5c/cruise.parquet",
+         "bytes": 40960, "sha256": "00ff", "content_hash": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+         "since": "v2026.08.25"}
+      ]
+    },
+    {
+      "name": "obs", "rows": 3000000, "partitioned": true, "supplemental": false,
+      "content_hash": "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f",
+      "compat_path": "ducklake/releases/v2026.09.01/parquet/obs/",
+      "objects": [
+        {"path": "ducklake/tables/obs/year=2019/1111111111111111111111aa/data_0.parquet",
+         "bytes": 1000, "sha256": "01", "content_hash": "1111111111111111111111aa11111111",
+         "since": "v2026.07.17", "partition_by": "year", "partition_value": "2019"},
+        {"path": "ducklake/tables/obs/year=2020/2222222222222222222222bb/data_0.parquet",
+         "bytes": 1000, "sha256": "02", "content_hash": "2222222222222222222222bb22222222",
+         "since": "v2026.09.01", "partition_by": "year", "partition_value": "2020"}
+      ]
+    },
+    {
+      "name": "obs_ctd_full", "rows": 216000000, "partitioned": true, "supplemental": true,
+      "content_hash": "abababababababababababababababab",
+      "compat_path": "ducklake/releases/v2026.09.01/parquet/obs_ctd_full/",
+      "objects": [
+        {"path": "ducklake/tables/obs_ctd_full/year=2019/3333333333333333333333cc/data_0.parquet",
+         "bytes": 1000, "sha256": "03", "content_hash": "3333333333333333333333cc33333333",
+         "since": "v2026.07.17", "partition_by": "year", "partition_value": "2019"}
+      ]
+    }
+  ]
+}
