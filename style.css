@@ -354,6 +354,8 @@ td.meas-datasets .filter-chip.active {
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 0.85rem;
 }
+#release-citation:empty { display: none; }
+#release-citation .card { margin-bottom: 0.85rem; }
 .card {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -395,6 +397,14 @@ td.meas-datasets .filter-chip.active {
   color: var(--fg);
   cursor: help;
 }
+.card .card-meta .chip.chip-deprecated {
+  background: color-mix(in srgb, var(--error) 18%, var(--panel-2));
+  border-color: color-mix(in srgb, var(--error) 55%, var(--border));
+  color: var(--fg);
+  cursor: help;
+}
+.card .card-meta a.chip { text-decoration: none; }
+.card .card-meta a.chip:hover { border-color: var(--accent); color: var(--accent); }
 .card .desc { color: var(--fg); margin: 0.25rem 0; }
 .card .desc p:first-child { margin-top: 0; }
 .card .desc p:last-child  { margin-bottom: 0; }
