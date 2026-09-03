@@ -698,6 +698,16 @@ function catalogChips(ct, version) {
   return out.join("");
 }
 
+// `deprecated`/`replaced_by`/`removed_in` on a catalog.json table entry
+// (WS-H1, calcofi4db ≥ 3.31.0: `obs` while `obs_bio`+`obs_env` ship it too).
+// Empty for older catalogs and for a table that isn't deprecated.
+function deprecatedChip(ct) {
+  if (!ct || !ct.deprecated) return "";
+  const by  = Array.isArray(ct.replaced_by) ? ct.replaced_by.join(", ") : (ct.replaced_by || "");
+  const tip = `Deprecated${by ? ` — replaced by ${by}` : ""}${ct.removed_in ? `. Objects dropped in release ${ct.removed_in}.` : ""}`;
+  return `<span class="chip chip-deprecated" title="${escHtml(tip)}">deprecated${by ? ` → ${escHtml(by)}` : ""}</span>`;
+}
+
 function renderTables(blobs) {
   const meta = blobs.metadata;
   const catalog = blobs.catalog;
@@ -748,6 +758,7 @@ function renderTables(blobs) {
           <span class="chip">${cols.length} cols</span>
           ${catalogChips(ct, State.activeVersion)}
           ${suppByTable.has(name) ? `<span class="chip chip-supp" title="Supplemental table: hosted + downloadable and tagged to this release, but excluded from the ERD and hidden by cc_get_db() unless supplemental=TRUE.">supplemental</span>` : ""}
+          ${deprecatedChip(ct)}
         </div>
         ${contribBar(name, blobs)}
         <div class="desc">${mdToHtml(t.description_md)}</div>
@@ -888,9 +899,47 @@ function renderColumns(blobs) {
 
 // ─── Datasets ───────────────────────────────────────────────────────────
 
+// SPDX-registered ids among metadata/license.csv's active vocabulary — these
+// resolve to a real spdx.org page. `custom` links to the dataset's own
+// license_url instead; `US-PD` and `unknown` render as plain chips.
+const SPDX_LICENSE_IDS = new Set(["CC-BY-4.0", "CC0-1.0", "CC-BY-NC-4.0", "CC-BY-SA-4.0"]);
+
+function licenseChip(d) {
+  if (!d.license) return "";
+  const label = escHtml(d.license);
+  if (d.license_url) return `<a class="chip" href="${escHtml(d.license_url)}" target="_blank" rel="noopener" title="license terms">${label}</a>`;
+  if (SPDX_LICENSE_IDS.has(d.license)) {
+    return `<a class="chip" href="https://spdx.org/licenses/${escHtml(d.license)}.html" target="_blank" rel="noopener" title="SPDX license definition">${label}</a>`;
+  }
+  return `<span class="chip">${label}</span>`;
+}
+
+// "How to cite this release" — from catalog.json's `citation` (WS-A0,
+// calcofi4db ≥ 3.30.0). Absent on any catalog cut before 2026-09-03, so this
+// renders nothing rather than an empty box — no error, no placeholder.
+function renderReleaseCitation(blobs) {
+  const el = $("#release-citation");
+  if (!el) return;
+  const catalog = blobs.catalog;
+  if (!catalog || !catalog.citation) { el.innerHTML = ""; return; }
+  const doiLine = catalog.doi
+    ? `<div class="muted mono" style="margin-top:0.3rem">DOI: <a href="https://doi.org/${escHtml(catalog.doi)}" target="_blank" rel="noopener">${escHtml(catalog.doi)}</a></div>`
+    : catalog.concept_doi
+    ? `<div class="muted mono" style="margin-top:0.3rem">All-versions DOI: <a href="https://doi.org/${escHtml(catalog.concept_doi)}" target="_blank" rel="noopener">${escHtml(catalog.concept_doi)}</a></div>`
+    : "";
+  el.innerHTML = `
+    <article class="card" id="release-citation-card">
+      <h3><span>How to cite this release</span></h3>
+      <div class="desc">${mdToHtml(catalog.citation)}</div>
+      ${doiLine}
+    </article>
+  `;
+}
+
 function renderDatasets(blobs) {
   const meta = blobs.metadata;
   const list = $("#datasets-list");
+  renderReleaseCitation(blobs);
   const datasets = Object.entries(meta.datasets || {});
   datasets.sort((a, b) => a[0].localeCompare(b[0]));
 
@@ -934,6 +983,8 @@ function renderDatasets(blobs) {
     if (d.link_calcofi_org) links.push(`<a href="${escHtml(d.link_calcofi_org)}" target="_blank">calcofi.org</a>`);
     if (d.link_data_source) links.push(`<a href="${escHtml(d.link_data_source)}" target="_blank">data source</a>`);
     if (d.workflow_url)     links.push(`<a href="${escHtml(d.workflow_url)}" target="_blank">workflow ↗</a>`);
+    if (d.doi)              links.push(`<a href="https://doi.org/${escHtml(d.doi)}" target="_blank">DOI: ${escHtml(d.doi)}</a>`);
+    if (d.contact)          links.push(`<a href="${escHtml(d.contact)}" target="_blank">contact</a>`);
     const col = State.datasetColor[key];
     const sw  = col ? `<span class="ds-swatch" style="background:${escHtml(col)}"></span>` : "";
     return `
@@ -946,11 +997,12 @@ function renderDatasets(blobs) {
           <button type="button" class="chip filter-chip" data-dataset="${escHtml(key)}">filter ▸ ${escHtml(key)}</button>
           ${d.coverage_temporal ? `<span class="chip">${escHtml(d.coverage_temporal)}</span>` : ""}
           ${d.coverage_spatial  ? `<span class="chip">${escHtml(d.coverage_spatial)}</span>`  : ""}
-          ${d.license           ? `<span class="chip">${escHtml(d.license)}</span>`           : ""}
+          ${licenseChip(d)}
         </div>
         <div class="desc">${mdToHtml(d.description || "")}</div>
         ${datasetTablesHtml(key, d)}
         ${d.citation_main ? `<div class="desc"><strong>Cite:</strong> ${mdToHtml(d.citation_main)}</div>` : ""}
+        ${d.acknowledgement ? `<div class="desc"><strong>Acknowledgement:</strong> ${mdToHtml(d.acknowledgement)}</div>` : ""}
         ${d.pi_names ? `<div class="desc muted"><strong>PI:</strong> ${escHtml(d.pi_names)}</div>` : ""}
         ${links.length ? `<div class="links">${links.join("")}</div>` : ""}
       </article>
