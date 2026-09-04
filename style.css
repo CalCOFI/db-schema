@@ -1,6 +1,6 @@
 /* CalCOFI Schema — style.css
    Tokens (--bg … --accent-d, --mono/--sans), the header and the footer come from
-   brand/v1/theme.css — the contract every CalCOFI product shares, linked before
+   brand/v2/theme.css — the contract every CalCOFI product shares, linked before
    this file in _layouts/default.html. This file is only what is specific to the
    schema browser. Dark default; light overrides at the bottom of each block. */
 

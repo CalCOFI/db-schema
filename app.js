@@ -425,7 +425,7 @@ function bindHeader() {
       syncHash();
     });
   });
-  // the toggle itself is wired by brand/v1 theme.js; it announces a change on
+  // the toggle itself is wired by brand/v2 theme.js; it announces a change on
   // `cc:theme`, and the ERD re-renders because mermaid bakes colors into the SVG
   document.addEventListener("cc:theme", () => {
     if (State.activeTab === "erd") renderActiveTab(true);
