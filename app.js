@@ -985,6 +985,8 @@ function renderDatasets(blobs) {
     if (d.workflow_url)     links.push(`<a href="${escHtml(d.workflow_url)}" target="_blank">workflow ↗</a>`);
     if (d.doi)              links.push(`<a href="https://doi.org/${escHtml(d.doi)}" target="_blank">DOI: ${escHtml(d.doi)}</a>`);
     if (d.contact)          links.push(`<a href="${escHtml(d.contact)}" target="_blank">contact</a>`);
+    // built from the key, never a hard-coded per-dataset list (plan 2026-09-05 D-4)
+    links.push(`<a href="https://calcofi.io/datasets/${escHtml(key)}/" target="_blank">dataset page ↗</a>`);
     const col = State.datasetColor[key];
     const sw  = col ? `<span class="ds-swatch" style="background:${escHtml(col)}"></span>` : "";
     return `
