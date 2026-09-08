@@ -191,3 +191,65 @@ export function pickerLabel(entry, latestVersion) {
                 : "";
   return `${star}${v}${dateBit}${mark}`;
 }
+
+// --- keys: relationships.json + integrity.json (calcofi4db ≥ 4.7.0) -----------------
+//
+// relationships.json declares each table's primary key (a string, or an array for
+// a composite key) and the foreign keys between released tables. integrity.json,
+// written by the release from 2026-09-08, MEASURES them: primary_keys[] with
+// n_rows / n_distinct / n_dup / n_null and foreign_keys[] with n_rows / n_null /
+// n_orphan, each with status ok | fail | skipped. keysFor() joins the two for one
+// table so the Tables tab can say "PK obs_id · unique, measured" and "→ sample
+// (0 orphans)" — and, for a release without integrity.json, "declared" only.
+
+function pkColumns(pk) {
+  if (pk == null) return [];
+  return Array.isArray(pk) ? pk.map(String) : [String(pk)];
+}
+
+// the measured row for one PK / FK, or null when integrity.json is absent
+function pkMeasure(integrity, table) {
+  const rows = (integrity && Array.isArray(integrity.primary_keys)) ? integrity.primary_keys : [];
+  return rows.find(r => r.table === table) || null;
+}
+function fkMeasure(integrity, fk) {
+  const rows = (integrity && Array.isArray(integrity.foreign_keys)) ? integrity.foreign_keys : [];
+  return rows.find(r => r.table === fk.table && r.column === fk.column &&
+                        r.ref_table === fk.ref_table && r.ref_column === fk.ref_column) || null;
+}
+
+// {pk: {columns, measure}, out: [{column, ref_table, ref_column, measure}], in: [...]}
+export function keysFor(table, relationships, integrity) {
+  const rels = relationships || {};
+  const pk   = pkColumns((rels.primary_keys || {})[table]);
+  const fks  = Array.isArray(rels.foreign_keys) ? rels.foreign_keys : [];
+  const out  = fks.filter(f => f.table === table).map(f => ({ ...f, measure: fkMeasure(integrity, f) }));
+  const inn  = fks.filter(f => f.ref_table === table && f.table !== table)
+                  .map(f => ({ ...f, measure: fkMeasure(integrity, f) }));
+  return { pk: { columns: pk, measure: pk.length ? pkMeasure(integrity, table) : null }, out, in: inn };
+}
+
+// one short phrase per measured row, for a chip title
+export function pkPhrase(m) {
+  if (!m) return "declared, not yet measured";
+  if (m.status === "skipped") return "declared; not measured in this release";
+  if (m.status === "ok") return `unique and non-NULL, measured on ${Number(m.n_rows).toLocaleString()} rows`;
+  return `${Number(m.n_dup || 0).toLocaleString()} duplicate, ${Number(m.n_null || 0).toLocaleString()} NULL`;
+}
+export function fkPhrase(m) {
+  if (!m) return "declared, not yet measured";
+  if (m.status === "skipped") return "declared; not measured in this release";
+  const nulls = Number(m.n_null || 0);
+  const base  = m.status === "ok" ? "0 orphans" : `${Number(m.n_orphan || 0).toLocaleString()} orphans`;
+  return nulls ? `${base}; ${nulls.toLocaleString()} NULL (a nullable edge)` : base;
+}
+
+// the column's role in one table, for the Columns tab: "PK", "PK (2 of 2)", "FK → sample.sample_key", ""
+export function columnRole(table, column, relationships) {
+  const k = keysFor(table, relationships, null);
+  const parts = [];
+  const i = k.pk.columns.indexOf(column);
+  if (i >= 0) parts.push(k.pk.columns.length > 1 ? `PK ${i + 1}/${k.pk.columns.length}` : "PK");
+  for (const f of k.out) if (f.column === column) parts.push(`FK → ${f.ref_table}.${f.ref_column}`);
+  return parts.join(" · ");
+}

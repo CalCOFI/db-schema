@@ -134,3 +134,64 @@ test("versions.json flags degrade to false/null when absent", () => {
   assert.equal(pickerLabel(versions[2], "v2026.09.01"), "v2026.08.10 · 2026-08-11");
   assert.equal(pickerLabel(versions[3], "v2026.09.01"), "v2026.07.17 (retired)");
 });
+
+// --- keys (relationships.json + integrity.json) ---------------------------------
+import { keysFor, pkPhrase, fkPhrase, columnRole } from "../release.js";
+
+const rels = {
+  primary_keys: { sample: "sample_key", sample_spatial: ["root_sample_key", "spatial_key"], obs: "obs_id" },
+  foreign_keys: [
+    { table: "obs",            column: "sample_key",      ref_table: "sample",  ref_column: "sample_key" },
+    { table: "obs",            column: "taxon_key",       ref_table: "taxon",   ref_column: "taxon_key" },
+    { table: "sample_spatial", column: "root_sample_key", ref_table: "sample",  ref_column: "sample_key" },
+    { table: "sample",         column: "parent_sample_key", ref_table: "sample", ref_column: "sample_key" },
+  ],
+};
+const integ = {
+  ok: false,
+  primary_keys: [
+    { table: "sample", columns: "sample_key", n_rows: 10, n_distinct: 10, n_dup: 0, n_null: 0, status: "ok" },
+    { table: "obs", columns: "obs_id", n_rows: 5, n_distinct: 4, n_dup: 1, n_null: 0, status: "fail" },
+  ],
+  foreign_keys: [
+    { table: "obs", column: "sample_key", ref_table: "sample", ref_column: "sample_key", n_rows: 5, n_null: 0, n_orphan: 0, status: "ok" },
+    { table: "obs", column: "taxon_key",  ref_table: "taxon",  ref_column: "taxon_key",  n_rows: 5, n_null: 2, n_orphan: 0, status: "ok" },
+  ],
+};
+
+test("keysFor: pk, outgoing and incoming edges, joined to their measurements", () => {
+  const k = keysFor("sample", rels, integ);
+  assert.deepEqual(k.pk.columns, ["sample_key"]);
+  assert.equal(k.pk.measure.status, "ok");
+  assert.equal(k.out.length, 1);                       // the self edge counts as outgoing
+  assert.equal(k.in.length, 2);                        // obs and sample_spatial point here; the self edge does not
+  const o = keysFor("obs", rels, integ);
+  assert.equal(o.pk.measure.status, "fail");
+  assert.equal(o.out.find(f => f.column === "taxon_key").measure.n_null, 2);
+  const s = keysFor("sample_spatial", rels, integ);
+  assert.deepEqual(s.pk.columns, ["root_sample_key", "spatial_key"]);
+  assert.equal(s.pk.measure, null);                    // declared, not measured
+});
+
+test("keysFor: no relationships or integrity renders as nothing, never throws", () => {
+  const k = keysFor("ghost", null, null);
+  assert.deepEqual(k.pk.columns, []); assert.equal(k.pk.measure, null);
+  assert.deepEqual(k.out, []); assert.deepEqual(k.in, []);
+});
+
+test("phrases: measured, failing, nullable, unmeasured", () => {
+  assert.equal(pkPhrase(integ.primary_keys[0]), "unique and non-NULL, measured on 10 rows");
+  assert.equal(pkPhrase(integ.primary_keys[1]), "1 duplicate, 0 NULL");
+  assert.equal(pkPhrase(null), "declared, not yet measured");
+  assert.equal(fkPhrase(integ.foreign_keys[0]), "0 orphans");
+  assert.equal(fkPhrase(integ.foreign_keys[1]), "0 orphans; 2 NULL (a nullable edge)");
+  assert.equal(fkPhrase({ status: "fail", n_orphan: 3 }), "3 orphans");
+});
+
+test("columnRole: PK, composite PK position, FK target", () => {
+  assert.equal(columnRole("sample", "sample_key", rels), "PK");
+  assert.equal(columnRole("sample_spatial", "spatial_key", rels), "PK 2/2");
+  assert.equal(columnRole("obs", "sample_key", rels), "FK → sample.sample_key");
+  assert.equal(columnRole("sample", "parent_sample_key", rels), "FK → sample.sample_key");
+  assert.equal(columnRole("obs", "value", rels), "");
+});

@@ -15,6 +15,7 @@ import {
   summarizeSince, sinceStats, summarizeTwin, twinInfo, tableBytes, shortHash,
   fmtBytes, catalogTotals, versionEntry, isConsolidated, retiredInfo,
   retiredDate, pickerLabel,
+  keysFor, pkPhrase, fkPhrase, columnRole,
 } from "./release.js";
 
 const $  = (s, r = document) => r.querySelector(s);
@@ -33,7 +34,7 @@ const State = window.SchemaApp = {
   filters:         new Set(), // active "provider_dataset" tag filters (OR across)
   datasetColor:    {},        // provider_dataset → hex (from metadata.erd_legend)
   _apply:          {},        // tab → fn re-applying text+tag filters for that tab
-  showSupplemental: false,    // supplemental tables hidden from ERD/Tables/Columns
+  showSupplemental: true,     // supplemental tables shown, badged (hidden by default was a 44-table-era choice; Ben, 2026-09-08)
 };
 
 // Supplemental tables (obs_ctd_full ~212M scans, obs_mets_full ~20M) are hosted
@@ -299,6 +300,8 @@ async function loadVersion(version) {
     metadata:      fetchJson(`${base}/metadata.json`),
     catalog:       fetchJson(`${base}/catalog.json`),
     relationships: fetchJson(`${base}/relationships.json`).catch(() => null),
+    // the measured keys (calcofi4db ≥ 4.7.0, releases from 2026-09-08); absent before
+    integrity:     fetchJson(`${base}/integrity.json`).catch(() => null),
     erd:           fetchText(`${base}/erd.mmd`).catch(() => null),
     notes:         fetchText(`${base}/RELEASE_NOTES.md`).catch(() => null),
   };
@@ -664,6 +667,27 @@ function catalogByName(catalog) {
 // the tooltip) and, for a partitioned table that also ships a single-file
 // twin, that copy on its own chip. Each comes back empty for a legacy entry,
 // so older releases render exactly as before.
+// the table's keys — declared by relationships.json and, from 2026-09-08, MEASURED by
+// integrity.json (calcofi4db ≥ 4.7.0): the primary key with its measurement, each outgoing
+// foreign key with its orphan count, and how many tables point here. A release without
+// integrity.json shows the declaration alone (no ✓ / ✗), so the chip never overstates.
+function keysLine(name, blobs) {
+  const k = keysFor(name, blobs.relationships, blobs.integrity);
+  if (!k.pk.columns.length && !k.out.length && !k.in.length) return "";
+  const cls  = (m) => !m ? "" : m.status === "ok" ? " chip-ok" : m.status === "fail" ? " chip-fail" : "";
+  const mark = (m) => !m ? "" : m.status === "ok" ? " ✓" : m.status === "fail" ? " ✗" : "";
+  const pk = k.pk.columns.length
+    ? `<span class="chip chip-key${cls(k.pk.measure)}" title="primary key: ${escHtml(pkPhrase(k.pk.measure))}">PK ${escHtml(k.pk.columns.join(", "))}${mark(k.pk.measure)}</span>`
+    : "";
+  const out = k.out.map(f =>
+    `<span class="chip chip-key${cls(f.measure)}" title="${escHtml(f.column)} → ${escHtml(f.ref_table)}.${escHtml(f.ref_column)}: ${escHtml(fkPhrase(f.measure))}">${escHtml(f.column)} → ${escHtml(f.ref_table)}${mark(f.measure)}</span>`).join("");
+  const refs = [...new Set(k.in.map(f => f.table))].sort();
+  const inn  = refs.length
+    ? `<span class="chip chip-key chip-in" title="referenced by ${escHtml(refs.join(", "))}">← ${refs.length} referencing</span>`
+    : "";
+  return `<div class="card-keys">${pk}${out}${inn}</div>`;
+}
+
 function catalogChips(ct, version) {
   if (!ct) return "";
   const out   = [];
@@ -760,6 +784,7 @@ function renderTables(blobs) {
           ${suppByTable.has(name) ? `<span class="chip chip-supp" title="Supplemental table: hosted + downloadable and tagged to this release, but excluded from the ERD and hidden by cc_get_db() unless supplemental=TRUE.">supplemental</span>` : ""}
           ${deprecatedChip(ct)}
         </div>
+        ${keysLine(name, blobs)}
         ${contribBar(name, blobs)}
         <div class="desc">${mdToHtml(t.description_md)}</div>
         <details>
@@ -830,6 +855,7 @@ function renderColumns(blobs) {
       name_long:   c.name_long || "",
       description: c.description_md || "",
       datasets:    dsFor(table),
+      role:        columnRole(table, key.slice(dot + 1), blobs.relationships),
     };
   });
   all.sort((a, b) => a.table.localeCompare(b.table) || a.column.localeCompare(b.column));
@@ -841,6 +867,7 @@ function renderColumns(blobs) {
         <tr>
           <th data-key="table"     aria-sort="ascending">table</th>
           <th data-key="column">column</th>
+          <th data-key="role" title="PK / FK, from relationships.json">key</th>
           <th data-key="data_type">type</th>
           <th data-key="units">units</th>
           <th data-key="description">description</th>
@@ -856,6 +883,7 @@ function renderColumns(blobs) {
       <tr>
         <td class="mono">${escHtml(r.table)}</td>
         <td class="mono">${escHtml(r.column)}${r.name_long ? `<br><span class="muted" style="font-size:0.78rem">${escHtml(r.name_long)}</span>` : ""}</td>
+        <td class="mono key">${escHtml(r.role)}</td>
         <td class="mono">${escHtml(r.data_type)}</td>
         <td class="units">${escHtml(r.units)}</td>
         <td>${mdToHtml(r.description)}</td>
@@ -871,7 +899,7 @@ function renderColumns(blobs) {
   function apply() {
     let rows = all.filter(r => passesTags(r.datasets) && (
       !filterQ ||
-      (r.table + " " + r.column + " " + r.units + " " + r.data_type +
+      (r.table + " " + r.column + " " + r.role + " " + r.units + " " + r.data_type +
        " " + r.name_long + " " + r.description).toLowerCase().includes(filterQ)));
     rows.sort((a, b) => {
       const av = (a[sortKey] || "").toString();

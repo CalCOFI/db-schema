@@ -14,7 +14,8 @@ version stays browsable here:
 |-----------------------|---------------|------------------------------------|
 | `erd.mmd`             | Diagram       | Mermaid string from `cc_erd()`     |
 | `metadata.json`       | Tables, Columns, Datasets, Measurements | descriptions + units + types |
-| `relationships.json`  | (driver of `erd.mmd`) |                            |
+| `relationships.json`  | Tables (keys line), Columns (key column), `erd.mmd` | every released table's primary key and the foreign keys between released tables (from v2026.09.08's successor, ingest-only edges stay in `relationships_all.csv`) |
+| `integrity.json`      | Tables (✓ / ✗ on each key chip) | **measured** keys, calcofi4db ≥ 4.7.0: per primary key `n_rows` / `n_distinct` / `n_dup` / `n_null`, per foreign key `n_rows` / `n_null` / `n_orphan`, each `status` ok \| fail \| skipped, `ok` overall. Absent on earlier releases, in which case the chips show the declaration alone |
 | `catalog.json`        | release-meta header, Tables | row counts + total size. From v2026.09 also `layout` / `writer` and, per table, `content_hash` + `objects[]` (`path`, `bytes`, `sha256`, `content_hash`, `since`, `compat_path`, `partition_by`/`partition_value`) — rendered as size, "what changed", hash and single-file-twin chips |
 | `RELEASE_NOTES.md`    | release-meta header | inline rendered with marked; "all releases ↗" opens `../RELEASES.md` |
 | `versions.json` + `latest.txt` (one folder up) | version dropdown | `consolidated` and `retired: {retired_utc, to, reason}` mark the picker and the header |
