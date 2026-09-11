@@ -5,6 +5,8 @@
 # client-side from GCS JSON — there is no DuckDB-WASM here.
 
 title:       "CalCOFI Schema"
+# the header title beside the "CalCOFI.io" lockup: the product's own name, no "CalCOFI" (the tab keeps `title`)
+product:     "Schema"
 description: "Tables, columns, ER diagram and dataset citations for every CalCOFI release."
 url:         "https://calcofi.io"
 baseurl:     "/db-schema"
