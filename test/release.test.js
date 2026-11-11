@@ -87,6 +87,10 @@ test("tableBytes: table-level bytes wins, else the sum over partition objects", 
   assert.equal(tableBytes(tbl(canonical, "cruise")), 40960);
   assert.equal(tableBytes(tbl(canonical, "obs")), 2000);   // 2 × 1000; the 1900 B twin is a copy
   assert.equal(fmtBytes(2000), "2.0 KB");
+  // regression: sizes are decimal, so the release reads as the docs quote it (3.09 GB), not 2.9 "GB"
+  assert.equal(fmtBytes(3_090_000_000), "3.1 GB");
+  assert.equal(fmtBytes(999), "999 B");
+  assert.equal(fmtBytes(71_900_000), "71.9 MB");
   assert.equal(fmtBytes(0), "—");
   assert.equal(tableBytes({ bytes: 7, objects: [{ bytes: 1 }] }), 7);
   assert.equal(tableBytes(null), null);

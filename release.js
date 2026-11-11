@@ -65,11 +65,13 @@ export function twinInfo(t) {
   return objs.find(o => o.partition_by == null) || null;
 }
 
+// decimal units (1 GB = 1e9 bytes), as the docs book and the release notes quote sizes: dividing by
+// 1024 under a "GB" label showed the release as 2.9 GB beside the docs' 3.09 GB
 export function fmtBytes(n) {
   if (!n) return "—";
   const u = ["B","KB","MB","GB","TB"];
   let i = 0;
-  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  while (n >= 1000 && i < u.length - 1) { n /= 1000; i++; }
   return `${n.toFixed(n >= 100 ? 0 : 1)} ${u[i]}`;
 }
 
